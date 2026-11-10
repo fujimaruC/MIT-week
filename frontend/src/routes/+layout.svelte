@@ -1,40 +1,59 @@
 <script lang="ts">
+  import { t, type MessageKey } from '$lib/i18n/index.svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { onNavigate } from '$app/navigation';
   import '../lib/styles/tokens.css';
   import '../app.css';
-  import '@fontsource-variable/bricolage-grotesque';
-  import '@fontsource/atkinson-hyperlegible/400.css';
-  import '@fontsource/atkinson-hyperlegible/700.css';
-  import ThemeSwitch from '$lib/components/ui/ThemeSwitch.svelte';
+  import '../lib/styles/fonts.css';
   import '../lib/styles/refinement.css';
+  import '../lib/styles/premium.css';
+  import ThemeSwitch from '$lib/components/ui/ThemeSwitch.svelte';
   import PreviewBadge from '$lib/components/ui/PreviewBadge.svelte';
+  import Aurora from '$lib/components/ui/Aurora.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import Logo from '$lib/components/ui/Logo.svelte';
+  import { reducedMotion } from '$lib/motion';
+  import { trackPointer } from '$lib/spotlight';
 
   let { children } = $props();
 
-  const LINKS = [
-    { href: '/deteksi', label: 'Periksa', match: ['/deteksi', '/hasil'] },
-    { href: '/cek-cepat', label: 'Cek cepat', match: ['/cek-cepat'] },
-    { href: '/edukasi', label: 'Belajar', match: ['/edukasi'] },
-    { href: '/tentang', label: 'Tentang', match: ['/tentang'] }
+  // One shell for every page (Sir, 10 Nov 2026: parents need few pages and
+  // few buttons): a top bar with the three destinations, always visible, with
+  // no hidden menu on phones, and a one-line footer. Tentang is in the bar
+  // again at Sir's request (seq 1029).
+  const path = $derived(page.url.pathname);
+  const NAV: Array<{ href: '/deteksi' | '/edukasi' | '/tentang'; label: MessageKey; icon: 'search' | 'book' | 'info' }> = [
+    { href: '/deteksi', label: 'nav.check', icon: 'search' },
+    { href: '/edukasi', label: 'nav.learn', icon: 'book' },
+    { href: '/tentang', label: 'nav.about', icon: 'info' }
   ];
+  const current = (href: string): boolean =>
+    href === '/deteksi' ? path === '/deteksi' || path === '/hasil' : path.startsWith(href);
+  const wide = $derived(path === '/deteksi' || path === '/hasil' || path.startsWith('/edukasi') || path === '/tentang');
 
-  // Move focus to the main heading on NAVIGATION only. Focusing on the initial
-  // mount would paint a focus ring on a heading the user never touched, which
-  // reads as a glitch.
+  // Page changes run through the View Transitions API where it exists.
+  onNavigate((navigation) => {
+    if (!document.startViewTransition || reducedMotion()) return;
+    return new Promise((done) => {
+      document.startViewTransition(async () => {
+        done();
+        await navigation.complete;
+      });
+    });
+  });
+
+  // Move focus to the main heading on NAVIGATION only.
   let previousPath: string | null = null;
   $effect(() => {
-    const path = page.url.pathname;
+    const now = page.url.pathname;
     if (previousPath === null) {
-      previousPath = path; // first render: record, do not focus
+      previousPath = now;
       return;
     }
-    if (path === previousPath) return;
-    previousPath = path;
-
-    const main = document.getElementById('main');
-    const heading = main?.querySelector('h1');
+    if (now === previousPath) return;
+    previousPath = now;
+    const heading = document.getElementById('main')?.querySelector('h1');
     if (heading) {
       heading.setAttribute('tabindex', '-1');
       heading.focus({ preventScroll: true });
@@ -42,253 +61,140 @@
   });
 </script>
 
-<a class="skip-link" href="#main">Langsung ke isi utama</a>
+<svelte:window onpointermove={trackPointer} />
+
+<a class="skip-link" href="#main">{t('layout.skip')}</a>
 
 <PreviewBadge />
 
-<header class="site-header">
-  <div class="wrap header-inner">
-    <a class="brand" href={resolve('/')} aria-label="AMBA, ke beranda">
-      <span class="logo" aria-hidden="true"><Icon name="shield-check" size={24} /></span>
+<Aurora />
+
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href={resolve('/')} aria-label={t('layout.home')}>
+      <span class="logo" aria-hidden="true"><Logo size={36} /></span>
       <span class="wordmark">AMBA</span>
     </a>
-
-    <nav aria-label="Navigasi utama">
+    <nav aria-label={t('layout.nav')}>
       <ul>
-        {#each LINKS as link (link.href)}
+        {#each NAV as link (link.href)}
           <li>
-            <a
-              class="nav-link"
-              href={resolve(link.href as '/' | '/deteksi' | '/cek-cepat' | '/edukasi' | '/tentang')}
-              aria-current={link.match.includes(page.url.pathname) ? 'page' : undefined}
-            >
-              {link.label}
+            <a class="top-link" href={resolve(link.href)} aria-current={current(link.href) ? 'page' : undefined}>
+              <Icon name={link.icon} size={20} /><span>{t(link.label)}</span>
             </a>
           </li>
         {/each}
       </ul>
     </nav>
-
-    <div class="tools">
-      <ThemeSwitch />
-    </div>
+    <ThemeSwitch />
   </div>
 </header>
 
-<main id="main" tabindex="-1" class:is-home={page.url.pathname === '/'}>
-  {#if page.url.pathname === '/'}
+<main id="main" tabindex="-1">
+  {#if path === '/'}
     {@render children()}
   {:else}
-    <div class="wrap page-wrap">
+    <div class="wrap page-wrap" class:wrap--wide={wide}>
       {@render children()}
     </div>
   {/if}
 </main>
 
-<footer class="site-footer">
-  <div class="wrap footer-inner">
-    <p class="footer-brand">AMBA</p>
-    <p class="footer-note">
-      AMBA membantu Anda menilai risiko informasi. Hasilnya <strong>indikatif</strong>,
-      bukan bukti pasti dan bukan alat bukti hukum.
-    </p>
-    <ul class="footer-links">
-      <li><a href={resolve('/deteksi')}>Periksa</a></li>
-      <li><a href={resolve('/edukasi')}>Belajar</a></li>
-      <li><a href={resolve('/cek-cepat')}>Cek cepat</a></li>
-      <li><a href={resolve('/tentang')}>Tentang</a></li>
-    </ul>
-  </div>
+<footer class="foot">
+  <p>
+    {t('foot.note')}
+    <a href={resolve('/tentang')}>{t('foot.more')}</a>
+  </p>
 </footer>
 
 <style>
-  .site-header {
-    background: var(--paper);
-    border-bottom: var(--border-width) solid var(--border);
+  .top {
     position: sticky;
     top: 0;
     z-index: 40;
+    /* Nearly solid and without backdrop blur: a blur over the moving aurora
+     * would be recomputed every frame. */
+    background: color-mix(in srgb, var(--paper) 93%, transparent);
+    border-bottom: 1px solid var(--border-soft);
+    view-transition-name: top;
   }
-  .header-inner {
+  .top-inner {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3) var(--space-5);
-    padding-block: 14px;
+    gap: var(--space-2);
+    max-width: var(--maxw-wide);
+    min-height: 60px;
+    margin-inline: auto;
+    padding-inline: var(--gutter);
   }
   .brand {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-3);
-    text-decoration: none;
+    gap: 10px;
+    min-width: 44px;
+    min-height: 44px;
+    margin-right: auto;
     color: var(--ink);
-    flex: none;
-    transition: transform var(--dur-fast) var(--ease-out);
+    text-decoration: none;
   }
-  .brand:hover { transform: translate(-2px, -2px); }
-  .brand:hover .logo { box-shadow: var(--shadow-hard-sm); }
-  .brand:active { transform: translate(1px, 1px); }
+  .brand:hover { color: var(--ink); }
   .logo {
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
-    background: var(--indigo);
-    color: var(--on-brand);
-    border: var(--border-width) solid var(--border);
-    border-radius: 14px;
-    box-shadow: var(--shadow-hard-xs);
-    transition: box-shadow var(--dur-fast) var(--ease-out);
-  }
-  .wordmark {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 1.55em;
-    letter-spacing: -0.03em;
-  }
-  nav ul {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2) var(--space-3);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  nav { font-size: var(--text-base); }
-  .tools {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
+    width: 36px;
+    height: 36px;
     flex: none;
+    border-radius: 50%;
   }
-
-  main {
-    padding-block: 0;
-    min-height: calc(100dvh - 160px);
-  }
-  main:focus { outline: none; }
-  .page-wrap {
-    padding-block: clamp(1.5rem, 4vw, 2.5rem) clamp(2.5rem, 6vw, 4rem);
-  }
-
-  .site-footer {
-    background: var(--white);
-    border-top: var(--border-width) solid var(--border);
-    padding-block: clamp(2rem, 5vw, 3rem);
-  }
-  .footer-inner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-3) var(--space-5);
-  }
-  .footer-brand {
-    margin: 0;
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 1.3em;
-    letter-spacing: -0.03em;
-  }
-  .footer-note {
-    margin: 0;
-    flex: 1 1 24rem;
-    color: var(--body-2);
-    font-size: var(--text-sm);
-    max-width: 46ch;
-  }
-  .footer-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-4);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .footer-links a {
+  .wordmark { font-size: 1.15rem; font-weight: 500; letter-spacing: 0.03em; }
+  nav ul { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  .top-link {
     display: inline-flex;
     align-items: center;
+    gap: 8px;
     min-height: 44px;
-    font-weight: 700;
+    padding: 0 14px;
+    border-radius: 999px;
+    color: var(--body-2);
     font-size: var(--text-sm);
+    font-weight: 500;
     text-decoration: none;
-    color: var(--ink);
-    transition: color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
   }
-  .footer-links a:hover { color: var(--indigo-text); text-decoration: underline; transform: translateY(-2px); }
+  .top-link:hover { background: var(--hover-overlay); color: var(--ink); }
+  .top-link[aria-current='page'] { background: var(--surface-2); color: var(--ink); }
 
-  /* Mobile: 2 deliberate rows (Row 1: brand + tools; Row 2: 4 equal nav links)
-   * Keeps mobile header compact (~80px instead of 180px) and clean. */
-  @media (max-width: 48rem) {
-    .header-inner {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 10px 12px;
-      padding-block: 10px;
-    }
-    .brand {
-      grid-column: 1;
-      grid-row: 1;
-    }
-    .logo {
-      width: 38px;
-      height: 38px;
-      border-radius: 11px;
-    }
-    .wordmark {
-      font-size: 1.35em;
-    }
-    .tools {
-      grid-column: 2;
-      grid-row: 1;
-      justify-content: flex-end;
-      gap: var(--space-2);
-    }
-    .tools :global(.text-size .label) { display: none; }
-    /* Two segmented controls plus the wordmark do not fit a 360px row, and
-     * overflow-x:clip was silently cutting the mode switch in half. Below
-     * 26rem the tools get their own row instead of being clipped. */
-    @media (max-width: 26rem) {
-      .header-inner {
-        grid-template-columns: 1fr;
-        gap: 8px;
-      }
-      .brand { grid-row: 1; }
-      .tools {
-        grid-row: 2;
-        grid-column: 1;
-        width: 100%;
-        justify-content: space-between;
-      }
-      nav { grid-row: 3; }
-      /* Keep the row inside 320px: label off, both segments compact. */
-      .tools { flex-wrap: wrap; gap: 6px; }
-      .tools :global(.text-size .label) { display: none; }
-      .tools :global(.seg button) { min-width: 40px; padding: 0 4px; }
-      .tools :global(.mode-switch button) { padding: 0 9px; font-size: 0.8rem; }
-    }
-    nav {
-      grid-column: 1 / -1;
-      grid-row: 2;
-      width: 100%;
-    }
-    nav ul {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 4px;
-      width: 100%;
-    }
-    nav :global(.nav-link) {
-      width: 100%;
+  main { min-width: 0; }
+  main:focus { outline: none; }
+  .page-wrap { padding-block: clamp(1.25rem, 3.5vw, 2.5rem) clamp(2.5rem, 6vw, 4rem); }
+
+  .foot {
+    margin-top: var(--space-7);
+    padding: var(--space-5) var(--gutter);
+    border-top: 1px solid var(--border-soft);
+    text-align: center;
+  }
+  .foot p { margin: 0 auto; max-width: var(--maxw-wide); color: var(--muted); font-size: var(--text-sm); }
+  .foot a { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 4px; color: var(--body-2); }
+  .foot a:hover { color: var(--ink); }
+
+  /* Phones: each destination is its icon over its word, as in a tab bar, so
+   * all three stay visible with their names. */
+  @media (max-width: 30rem) {
+    nav ul { gap: 2px; }
+    .top-link {
+      flex-direction: column;
       justify-content: center;
-      padding: 0 4px;
-      font-size: 0.88rem;
-      min-height: 38px;
-      text-align: center;
-      white-space: nowrap;
+      gap: 2px;
+      min-width: 60px;
+      min-height: 52px;
+      padding: 4px 6px;
+      border-radius: 14px;
+      font-size: var(--text-xs);
+      line-height: 1.1;
     }
+  }
+  /* The narrowest phones keep the mark and drop the written name. */
+  @media (max-width: 23.75rem) {
+    .wordmark { display: none; }
   }
 </style>

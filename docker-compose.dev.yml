@@ -13,10 +13,11 @@ services:
       - ENVIRONMENT=development
       - LLM_MOCK=${LLM_MOCK:-true}
       - PUBLIC_APP_URL=http://localhost:5173
-      - NINEROUTER_BASE_URL=${NINEROUTER_BASE_URL:-http://host.docker.internal:20128/v1}
+      - NINEROUTER_BASE_URL=${NINEROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       - NINEROUTER_API_KEY=${NINEROUTER_API_KEY:-}
-      - NINEROUTER_MODEL=${NINEROUTER_MODEL:-Maru}
+      - NINEROUTER_MODEL=${NINEROUTER_MODEL:-nvidia/nemotron-3.5-super-vl:free}
       - NINEROUTER_REASONING_EFFORT=${NINEROUTER_REASONING_EFFORT:-low}
+      - LLM_EXTRA_BODY=${LLM_EXTRA_BODY:-}
       - FACT_RETRIEVAL=${FACT_RETRIEVAL:-true}
       - FACT_SEARCH_URL=${FACT_SEARCH_URL:-https://www.bing.com/news/search}
       - HARD_TIMEOUT_MS=${HARD_TIMEOUT_MS:-20000}

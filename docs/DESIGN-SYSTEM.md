@@ -3,6 +3,12 @@
 > Status: **implemented** in `frontend/`. Source of truth for the look:
 > `docs/waspada-design-spec.md`. This file records how that spec maps onto the
 > real SvelteKit app, and the decisions taken where the spec left room.
+>
+> Update 2026-11-10 (v2): the text-size toggle (A / A+ / A++) and the Jelajah and
+> Esensial modes were removed. Mentions of them below describe the earlier design
+> and no longer apply: there is one presentation, flat (no stickers, tilt, marquee
+> or gradients), with the same dark and light tokens. Reduced motion is still
+> honoured through `prefers-reduced-motion`.
 
 ---
 

@@ -1,29 +1,29 @@
 {
   "name": "AMBA — Periksa sebelum percaya",
   "short_name": "AMBA",
-  "description": "Periksa tautan, tangkapan layar, dan pesan yang mencurigakan. Hasilnya indikatif, bukan bukti pasti.",
+  "description": "Periksa gambar dan tautan yang mencurigakan: buatan AI atau asli, teks ditimpa, tautan asli atau jebakan. Hasilnya indikatif, bukan bukti pasti.",
   "lang": "id",
   "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#070302",
-  "theme_color": "#070302",
+  "background_color": "#141413",
+  "theme_color": "#141413",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icons/icon-192.png?v=2",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

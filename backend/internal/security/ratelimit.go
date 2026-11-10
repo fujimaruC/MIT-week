@@ -21,6 +21,9 @@ type RateLimitConfig struct {
 	IdleTTL        time.Duration // evict a client after this long unused
 	SweepInterval  time.Duration
 	TrustedProxies []*net.IPNet // peers allowed to set the forwarded-client header
+	// ClientIPHeader is the header a trusted proxy writes the client address
+	// to. Empty means X-Forwarded-For.
+	ClientIPHeader string
 }
 
 // DefaultRateLimitConfig returns the limits from TECH_SPEC §7.3.
@@ -105,15 +108,37 @@ func (rl *RateLimiter) ClientKey(r *http.Request) string {
 		identity = host
 	}
 	if rl.peerIsTrusted(r.RemoteAddr) {
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			first := strings.TrimSpace(strings.Split(fwd, ",")[0])
-			if first != "" {
-				identity = first
-			}
+		if forwarded := forwardedClient(r, rl.cfg.ClientIPHeader); forwarded != "" {
+			identity = forwarded
 		}
 	}
 	sum := sha256.Sum256(append(rl.salt, []byte(identity)...))
 	return hex.EncodeToString(sum[:16])
+}
+
+// forwardedClient reads the client address a trusted proxy reported. For
+// X-Forwarded-For the RIGHTMOST entry is used: it is the one our proxy
+// appended, while everything to its left came from the client and can be
+// forged. A dedicated header (Fly-Client-IP) is overwritten by the proxy and
+// used as is. Anything that is not an IP address is ignored.
+func forwardedClient(r *http.Request, header string) string {
+	if header == "" || strings.EqualFold(header, "X-Forwarded-For") {
+		values := r.Header.Values("X-Forwarded-For")
+		if len(values) == 0 {
+			return ""
+		}
+		parts := strings.Split(values[len(values)-1], ",")
+		candidate := strings.TrimSpace(parts[len(parts)-1])
+		if net.ParseIP(candidate) != nil {
+			return candidate
+		}
+		return ""
+	}
+	candidate := strings.TrimSpace(r.Header.Get(header))
+	if net.ParseIP(candidate) != nil {
+		return candidate
+	}
+	return ""
 }
 
 func (rl *RateLimiter) peerIsTrusted(remoteAddr string) bool {
@@ -177,6 +202,12 @@ func (rl *RateLimiter) ReleaseInFlight() {
 func (rl *RateLimiter) Middleware(onLimited http.HandlerFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Health probes come from the platform every few seconds and must
+			// never be throttled (or count against a shared proxy address).
+			if strings.HasSuffix(r.URL.Path, "/healthz") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			ok, delay := rl.Allow(rl.ClientKey(r))
 			if !ok {
 				secs := int(delay.Seconds()) + 1

@@ -86,30 +86,6 @@ paths:
         "415": { $ref: "#/components/responses/UnsupportedMedia" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
-  /audit/text:
-    post:
-      operationId: auditText
-      summary: Audit a text message
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                text: { type: string, maxLength: 5000 }
-              required: [text]
-      responses:
-        "200":
-          description: Final Dossier or SSE stream
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Dossier" }
-            text/event-stream:
-              schema: { type: string }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "429": { $ref: "#/components/responses/RateLimited" }
-
   /verify:
     post:
       operationId: verifyToken
@@ -152,39 +128,6 @@ paths:
                             url: { type: string }
                             m: { $ref: "#/components/schemas/FactStatus" }
                 required: [valid]
-
-  /reply:
-    post:
-      operationId: reply
-      summary: Draft a polite reply from a share token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                token: { type: string }
-                tone:
-                  type: string
-                  enum: [hormat, santai, singkat]
-              required: [token, tone]
-      responses:
-        "200":
-          description: Reply text
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  text: { type: string, maxLength: 280 }
-                  source:
-                    type: string
-                    enum: [llm, template]
-                    description: llm = model draft that passed validation; template = deterministic fallback
-                required: [text, source]
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "429": { $ref: "#/components/responses/RateLimited" }
 
   /ops/status:
     get:
@@ -287,6 +230,7 @@ components:
 
   schemas:
     Status:
+      description: INSUFFICIENT is kept for old payloads and is no longer emitted.
       type: string
       enum: [SAFE, SUSPICIOUS, TAMPERED, INSUFFICIENT]
 
@@ -296,7 +240,7 @@ components:
 
     InputType:
       type: string
-      enum: [URL, FILE, TEXT]
+      enum: [URL, FILE]
 
     Anomaly:
       type: object
@@ -309,6 +253,16 @@ components:
           description: Normalized [ymin, xmin, ymax, xmax] on a 0-1000 scale
         extracted_text: { type: string }
         reason: { type: string }
+        evidence:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: >
+            Timpa Teks: how differently the text in the box reacts to JPEG
+            re-compression compared with the image's other text (0-100).
+            null when it could not be measured (no lettering in the box, too
+            little other text, WebP, or no time left).
       required: [bounding_box]
 
     Source:
@@ -347,7 +301,7 @@ components:
           nullable: true
           minimum: 0
           maximum: 100
-          description: RISK score, not confidence. Null when INSUFFICIENT.
+          description: RISK score, not confidence. Always present on new results (null only in old INSUFFICIENT payloads).
         status: { $ref: "#/components/schemas/Status" }
         short_title: { type: string }
         explanation: { type: string, maxLength: 400 }
@@ -356,14 +310,16 @@ components:
           type: array
           items: { type: string, enum: [ela, ai, fact, link, llm_untrusted] }
         not_checked:
+          description: Only checks that apply to the input and failed (ELA is never listed for a link or a video).
           type: array
           items: { type: string, enum: [ela, ai, fact, link] }
         floors_applied:
           type: array
           items:
             type: string
-            enum: [FACT_CONTRADICTED, LINK_MALICIOUS, ELA_CORROBORATED,
-                   ELA_SOLO_CAP, INJECTION_GUARD]
+            enum: [FACT_CONTRADICTED, LINK_MALICIOUS, LINK_STRONG, ELA_CORROBORATED,
+                   ELA_SOLO_CAP, INJECTION_GUARD, AI_PROVENANCE, AI_EDITED, AI_LIKELY,
+                   VIDEO_CONTEXT_MISMATCH, VIDEO_MANIPULATED]
       required: [status, explanation, explanation_simple, basis, not_checked, floors_applied]
 
     Pillars:
@@ -382,11 +338,21 @@ components:
           required: [available, score, reliability]
         ai:
           type: object
+          description: >
+            Jejak AI: whether the image (the upload, or a link's preview image)
+            was made with AI. score is a likelihood computed in Go from the
+            image's provenance, an optional detector and the model's visible
+            clues; reliability is the weight the strongest of those earns.
           properties:
             available: { type: boolean }
-            score: { type: integer }
+            score: { type: integer, minimum: 0, maximum: 100 }
+            reliability: { type: number, minimum: 0, maximum: 1 }
             indicators: { type: array, items: { type: string } }
             caveat: { type: string }
+            provenance: { $ref: "#/components/schemas/Provenance" }
+            detector:
+              nullable: true
+              allOf: [{ $ref: "#/components/schemas/AIDetector" }]
           required: [available, score]
         fact:
           type: object
@@ -410,6 +376,33 @@ components:
               items: { $ref: "#/components/schemas/LinkReason" }
           required: [available, score]
 
+    Provenance:
+      type: object
+      description: >
+        What the image declares about its origin: Content Credentials (c2pa),
+        IPTC/XMP metadata (xmp), generator settings in PNG text (png_text),
+        EXIF (exif), an AI label visible on the image (watermark), what the
+        creator says in the post of a video (creator), or what reputable news
+        sites say about the video (web). Missing
+        metadata proves nothing; camera data is a hint, not proof.
+      properties:
+        kind: { type: string, enum: [AI_GENERATED, AI_EDITED, CAMERA, NONE] }
+        source: { type: string, enum: [c2pa, xmp, png_text, exif, watermark, creator, web, ""] }
+        generator: { type: string }
+        camera: { type: string }
+        c2pa: { type: boolean }
+      required: [kind, source, generator, camera, c2pa]
+
+    AIDetector:
+      type: object
+      description: >
+        A dedicated AI-image detector's answer, present only when one is
+        configured (SIGHTENGINE_API_USER / SIGHTENGINE_API_SECRET) and answered.
+      properties:
+        name: { type: string }
+        score: { type: integer, minimum: 0, maximum: 100 }
+      required: [name, score]
+
     Dossier:
       type: object
       properties:
@@ -427,6 +420,25 @@ components:
           maxItems: 5
           items: { $ref: "#/components/schemas/Tactic" }
         share_token: { type: string }
+        source_metadata:
+          description: >
+            Public description of the submitted link (PRD F1), read via oEmbed
+            or OpenGraph. null for FILE input. BLOCKED means the
+            platform refused automated reading; the UI asks for a screenshot.
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/SourceMetadata" }]
+        ocr_text:
+          type: string
+          maxLength: 2000
+          description: >
+            Text the model read in an uploaded image (FILE input only, "" otherwise).
+            Tactics with source "ocr" are highlighted in it, labelled "dibaca dari gambar".
+        video:
+          description: >
+            Frame-by-frame analysis of a social video link (TikTok, YouTube,
+            X, Instagram, Facebook). Absent for other input.
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/VideoAnalysis" }]
       required:
         [schema_version, id, timestamp, input_type, source_reference,
          degraded, is_demo, verdict, pillars, tactics, share_token]
@@ -439,6 +451,91 @@ components:
         placeholder: { type: boolean }
         note: { type: string }
       required: [enabled, configured, placeholder]
+
+    VideoAnalysis:
+      type: object
+      description: >
+        A social video downloaded from the submitted link and analysed frame by
+        frame, and by its soundtrack when the model takes audio. The AI score
+        lives in pillars.ai; this object holds what only a video has.
+      properties:
+        status: { type: string, enum: [OK, UNAVAILABLE] }
+        reason:
+          type: string
+          enum: ["", unsupported, private, too_long, too_big, timeout, download_failed, no_tools, model_failed]
+        platform: { type: string, enum: [youtube, tiktok, x, instagram, facebook] }
+        duration_sec: { type: number, minimum: 0 }
+        upload_date: { type: string, description: "YYYY-MM-DD, or empty when unknown" }
+        platform_ai_label: { type: boolean }
+        frames:
+          type: array
+          maxItems: 8
+          items: { $ref: "#/components/schemas/VideoFrame" }
+        audio_analyzed: { type: boolean }
+        summary: { type: string, maxLength: 300 }
+        transcript: { type: string, maxLength: 800 }
+        manipulation: { $ref: "#/components/schemas/VideoSignal" }
+        context: { $ref: "#/components/schemas/VideoSignal" }
+        creator_disclosure: { $ref: "#/components/schemas/CreatorDisclosure" }
+        web_evidence:
+          type: array
+          maxItems: 5
+          description: >
+            Reputable news and fact-check pages found by searching the
+            video's own title and description. Only pages judged to be about
+            this video are listed.
+          items: { $ref: "#/components/schemas/WebEvidence" }
+      required: [status, reason, platform, duration_sec, upload_date, platform_ai_label,
+                 frames, audio_analyzed, summary, transcript, manipulation, context]
+
+    CreatorDisclosure:
+      type: object
+      description: >
+        What the creator says about AI in the post (title, description, tags,
+        account name). strong: names AI or a generator as the maker. weak: only
+        mentions AI. none: nothing, or news about AI.
+      properties:
+        level: { type: string, enum: [none, weak, strong] }
+        phrase: { type: string, maxLength: 60, description: "The matched text, empty for none" }
+      required: [level, phrase]
+
+    WebEvidence:
+      type: object
+      properties:
+        title: { type: string, maxLength: 200 }
+        url: { type: string, pattern: "^https://" }
+        publisher: { type: string, maxLength: 80 }
+        says: { type: string, enum: [AI, REAL, HOAX], description: "AI: the page says the video is AI-made. REAL: it reports it as genuine. HOAX: it calls the claim or video a hoax." }
+      required: [title, url, publisher, says]
+
+    VideoFrame:
+      type: object
+      properties:
+        at_sec: { type: number, minimum: 0 }
+        thumb: { type: string, pattern: "^data:image/jpeg;base64,", description: "JPEG thumbnail, longest side <= 240 px" }
+      required: [at_sec, thumb]
+
+    VideoSignal:
+      type: object
+      properties:
+        score: { type: integer, minimum: 0, maximum: 100 }
+        indicators:
+          type: array
+          maxItems: 5
+          items: { type: string, maxLength: 160 }
+      required: [score, indicators]
+
+    SourceMetadata:
+      type: object
+      properties:
+        status: { type: string, enum: [OK, BLOCKED, UNAVAILABLE] }
+        platform: { type: string, enum: [youtube, tiktok, x, instagram, facebook, threads, web] }
+        via: { type: string, enum: [oembed, opengraph, ""] }
+        title: { type: string, maxLength: 300 }
+        author: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        site_name: { type: string, maxLength: 80 }
+      required: [status, platform, via, title, author, description, site_name]
 
     ErrorEnvelope:
       type: object

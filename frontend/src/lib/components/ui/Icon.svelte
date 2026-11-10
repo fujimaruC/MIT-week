@@ -26,7 +26,22 @@
     | 'refresh'
     | 'whatsapp'
     | 'volume-off'
-    | 'chevron';
+    | 'chevron'
+    | 'video'
+    | 'search'
+    | 'arrow-up-right'
+    | 'menu'
+    | 'plus'
+    | 'arrow-up'
+    | 'sun'
+    | 'stop'
+    | 'info'
+    | 'panel'
+    | 'user'
+    | 'clock'
+    | 'pin'
+    | 'help'
+    | 'steps';
 
   interface Props {
     name: IconName;
@@ -37,7 +52,7 @@
   let { name, size = 24, label }: Props = $props();
 
   const filled = $derived(name === 'sparkle');
-  const strokeWidth = $derived(name === 'shield-check' ? 2.4 : 2.2);
+  const strokeWidth = $derived(name === 'shield-check' ? 2.2 : 1.9);
 </script>
 
 <svg
@@ -57,6 +72,12 @@
   {#if name === 'shield-check'}
     <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" />
     <path d="M9 12l2 2 4-4" />
+  {:else if name === 'video'}
+    <rect x="3" y="5" width="18" height="14" rx="3" />
+    <path d="M10 9.5v5l4.5-2.5L10 9.5z" />
+  {:else if name === 'search'}
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M16 16l4.5 4.5" />
   {:else if name === 'chat'}
     <path d="M4 5h16v11H9l-5 4V5z" />
   {:else if name === 'link'}
@@ -66,6 +87,39 @@
     <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z" />
   {:else if name === 'arrow-right'}
     <path d="M5 12h14M13 6l6 6-6 6" />
+  {:else if name === 'menu'}
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  {:else if name === 'plus'}
+    <path d="M12 5v14M5 12h14" />
+  {:else if name === 'arrow-up'}
+    <path d="M12 19V5M6 11l6-6 6 6" />
+  {:else if name === 'sun'}
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
+  {:else if name === 'stop'}
+    <rect x="7" y="7" width="10" height="10" rx="2" />
+  {:else if name === 'user'}
+    <circle cx="12" cy="8.5" r="3.8" />
+    <path d="M4.5 20c.6-3.6 3.7-5.6 7.5-5.6s6.9 2 7.5 5.6" />
+  {:else if name === 'clock'}
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  {:else if name === 'pin'}
+    <path d="M12 20.5s-6.5-5.7-6.5-10.4a6.5 6.5 0 0 1 13 0c0 4.7-6.5 10.4-6.5 10.4z" />
+    <circle cx="12" cy="10" r="2.4" />
+  {:else if name === 'help'}
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4M12 16.5v.5" />
+  {:else if name === 'steps'}
+    <path d="M5 6.5h14M5 12h10M5 17.5h6" />
+  {:else if name === 'info'}
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 11v5M12 8v.5" />
+  {:else if name === 'panel'}
+    <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+    <path d="M9.5 4.5v15" />
+  {:else if name === 'arrow-up-right'}
+    <path d="M7 17L17 7M9 7h8v8" />
   {:else if name === 'check'}
     <path d="M5 12l5 5 9-10" />
   {:else if name === 'book'}

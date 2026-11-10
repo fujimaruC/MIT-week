@@ -1,120 +1,457 @@
 {
   "cases": [
     {
-      "id": "contoh-hoax-bantuan",
-      "caption": "Bantuan Rp 500.000 dibagikan hari ini saja. Sebarkan ke 10 grup, jangan sampai ketinggalan!",
+      "id": "demo-tiktok",
+      "caption": "Video TikTok: bantuan Rp 500.000 dibagikan hari ini saja",
       "dossier": {
         "schema_version": 2,
-        "id": "AMBA-20261030-DEMO",
+        "id": "AMBA-20261030-DMO1",
         "timestamp": "2026-10-30T07:22:15Z",
-        "input_type": "TEXT",
-        "source_reference": "Contoh pesan berantai",
+        "input_type": "URL",
+        "source_reference": "https://www.tiktok.com/@contoh.simulasi/video/7300000000000000001",
         "degraded": false,
         "is_demo": true,
         "verdict": {
-          "score": 78,
+          "score": 85,
           "status": "TAMPERED",
-          "short_title": "Contoh: pesan berantai bantuan",
-          "explanation": "Pesan ini memakai tekanan waktu dan iming-iming hadiah. Sumber resmi tidak ditemukan. Ini data contoh untuk memperlihatkan cara kerja AMBA.",
+          "short_title": "Contoh: video TikTok berisi klaim bansos",
+          "explanation": "Tautannya mengarah ke TikTok asli, tetapi keterangan videonya memuat klaim bantuan yang dibantah sumber contoh. Keterangannya juga memakai tekanan waktu dan meminta disebarkan. Ini data simulasi untuk memperlihatkan cara kerja AMBA.",
           "explanation_simple": "Kabar ini dibantah sumber terpercaya. Jangan disebarkan.",
-          "basis": ["ai", "fact"],
-          "not_checked": ["ela", "link"],
-          "floors_applied": ["FACT_CONTRADICTED"]
+          "basis": [
+            "fact",
+            "link"
+          ],
+          "not_checked": [],
+          "floors_applied": [
+            "FACT_CONTRADICTED"
+          ]
         },
         "pillars": {
-          "ela": {"available": false, "score": 0, "reliability": 0, "reliability_note": null, "anomalies": []},
+          "ela": {
+            "available": false,
+            "score": 0,
+            "reliability": 0,
+            "reliability_note": null,
+            "anomalies": []
+          },
           "ai": {
-            "available": true,
-            "score": 82,
-            "indicators": ["Tekanan waktu", "Iming-iming hadiah", "Ajakan menyebarkan"],
-            "caveat": "Indikatif, bukan bukti pasti"
+            "available": false,
+            "score": 0,
+            "reliability": 0,
+            "indicators": [],
+            "caveat": "",
+            "provenance": {
+              "kind": "NONE",
+              "source": "",
+              "generator": "",
+              "camera": "",
+              "c2pa": false
+            },
+            "detector": null
           },
           "fact": {
             "available": true,
             "claim": "Bantuan Rp 500.000 dibagikan hari ini",
             "status": "CONTRADICTS",
             "sources": [
-              {"title": "Contoh artikel pemeriksaan fakta", "publisher": "Sumber Contoh", "url": "https://example.org/contoh-cek-fakta", "match": "CONTRADICTS"}
+              {
+                "title": "Contoh artikel pemeriksaan fakta",
+                "publisher": "Sumber Contoh",
+                "url": "https://example.org/contoh-cek-fakta",
+                "match": "CONTRADICTS"
+              }
             ]
           },
-          "link": {"available": false, "score": 0, "final_url": "", "redirect_chain": [], "reasons": []}
-        },
-        "tactics": [
-          {"code": "URGENCY", "phrase": "hari ini saja", "source": "text"},
-          {"code": "REWARD_BAIT", "phrase": "Bantuan Rp 500.000", "source": "text"}
-        ],
-        "share_token": ""
-      }
-    },
-    {
-      "id": "contoh-tautan-mencurigakan",
-      "caption": "Akun Anda akan diblokir. Verifikasi sekarang di tautan berikut.",
-      "dossier": {
-        "schema_version": 2,
-        "id": "AMBA-20261030-DEMO",
-        "timestamp": "2026-10-30T07:24:00Z",
-        "input_type": "URL",
-        "source_reference": "https://example.org/contoh-tautan",
-        "degraded": false,
-        "is_demo": true,
-        "verdict": {
-          "score": 88,
-          "status": "TAMPERED",
-          "short_title": "Contoh: tautan meniru halaman masuk",
-          "explanation": "Alamat tautan meniru nama layanan populer dan meminta data akun. Jangan dibuka. Ini data contoh.",
-          "explanation_simple": "Tautan ini mirip penipuan. Jangan diklik.",
-          "basis": ["ai", "link"],
-          "not_checked": ["ela", "fact"],
-          "floors_applied": ["LINK_MALICIOUS"]
-        },
-        "pillars": {
-          "ela": {"available": false, "score": 0, "reliability": 0, "reliability_note": null, "anomalies": []},
-          "ai": {"available": true, "score": 74, "indicators": ["Ancaman pemblokiran", "Permintaan verifikasi mendesak"], "caveat": "Indikatif, bukan bukti pasti"},
-          "fact": {"available": false, "claim": "", "status": "UNVERIFIED", "sources": []},
           "link": {
             "available": true,
-            "score": 92,
-            "final_url": "https://example.org/contoh-tautan",
-            "redirect_chain": ["https://example.org/contoh-tautan"],
-            "reasons": [{"code": "LOOKALIKE_BRAND", "text": "Domain meniru nama layanan populer"}]
+            "score": 0,
+            "final_url": "https://www.tiktok.com/@contoh.simulasi/video/7300000000000000001",
+            "redirect_chain": [
+              "https://www.tiktok.com/@contoh.simulasi/video/7300000000000000001"
+            ],
+            "reasons": []
           }
         },
         "tactics": [
-          {"code": "FEAR", "phrase": "Akun Anda akan diblokir", "source": "text"},
-          {"code": "URGENCY", "phrase": "Verifikasi sekarang", "source": "text"}
+          {
+            "code": "URGENCY",
+            "phrase": "hari ini saja",
+            "source": "text"
+          },
+          {
+            "code": "REWARD_BAIT",
+            "phrase": "Bantuan Rp 500.000",
+            "source": "text"
+          }
         ],
-        "share_token": ""
+        "share_token": "",
+        "source_metadata": {
+          "status": "OK",
+          "platform": "tiktok",
+          "via": "oembed",
+          "title": "Bantuan Rp 500.000 dibagikan hari ini saja. Sebarkan ke 10 grup, jangan sampai ketinggalan!",
+          "author": "contoh.simulasi",
+          "description": "",
+          "site_name": "TikTok"
+        },
+        "ocr_text": ""
       }
     },
     {
-      "id": "contoh-informasi-aman",
-      "caption": "Jadwal posyandu bulan ini: Sabtu, 8 pagi di balai warga.",
+      "id": "demo-berita-ig",
+      "caption": "Tangkapan layar berita: harga beras turun jadi Rp 2.000/kg",
+      "image": "/demo/berita-ig.jpg",
       "dossier": {
         "schema_version": 2,
-        "id": "AMBA-20261030-DEMO",
-        "timestamp": "2026-10-30T07:26:00Z",
-        "input_type": "TEXT",
-        "source_reference": "Contoh pengumuman warga",
+        "id": "AMBA-20261030-DMO2",
+        "timestamp": "2026-10-30T07:23:40Z",
+        "input_type": "FILE",
+        "source_reference": "Gambar yang diunggah",
         "degraded": false,
         "is_demo": true,
         "verdict": {
-          "score": 8,
+          "score": 91,
+          "status": "TAMPERED",
+          "short_title": "Contoh: tangkapan layar berita diedit",
+          "explanation": "Angka harga pada gambar ini tampak ditempel: kompresinya berbeda dari teks lain di gambar. Sumber contoh juga membantah klaimnya. Geser penanda untuk membandingkan gambar asli dan hasil ELA. Ini data simulasi.",
+          "explanation_simple": "Kabar ini dibantah sumber terpercaya. Jangan disebarkan.",
+          "basis": [
+            "ela",
+            "ai",
+            "fact"
+          ],
+          "not_checked": [],
+          "floors_applied": [
+            "FACT_CONTRADICTED",
+            "ELA_CORROBORATED"
+          ]
+        },
+        "pillars": {
+          "ela": {
+            "available": true,
+            "score": 100,
+            "reliability": 1,
+            "reliability_note": null,
+            "anomalies": [
+              {
+                "bounding_box": [
+                  400,
+                  44,
+                  491,
+                  944
+                ],
+                "extracted_text": "RP 2.000/KG",
+                "reason": "Angka harga punya tepi dan kompresi berbeda dari teks di sekitarnya",
+                "evidence": 100
+              }
+            ]
+          },
+          "ai": {
+            "available": true,
+            "score": 12,
+            "reliability": 0.5,
+            "indicators": [
+              "Tampak seperti tangkapan layar unggahan biasa"
+            ],
+            "caveat": "Indikatif, bukan bukti pasti",
+            "provenance": {
+              "kind": "NONE",
+              "source": "",
+              "generator": "",
+              "camera": "",
+              "c2pa": false
+            },
+            "detector": null
+          },
+          "fact": {
+            "available": true,
+            "claim": "Harga beras turun menjadi Rp 2.000 per kilogram",
+            "status": "CONTRADICTS",
+            "sources": [
+              {
+                "title": "Contoh: harga beras tidak turun ke Rp 2.000",
+                "publisher": "Sumber Contoh",
+                "url": "https://example.org/contoh-cek-fakta",
+                "match": "CONTRADICTS"
+              }
+            ]
+          },
+          "link": {
+            "available": false,
+            "score": 0,
+            "final_url": "",
+            "redirect_chain": [],
+            "reasons": []
+          }
+        },
+        "tactics": [
+          {
+            "code": "URGENCY",
+            "phrase": "SEBARKAN SEBELUM DIHAPUS",
+            "source": "ocr"
+          }
+        ],
+        "share_token": "",
+        "source_metadata": null,
+        "ocr_text": "BERITA.CONTOH HARGA BERAS TURUN JADI RP 2.000/KG SEBARKAN SEBELUM DIHAPUS! CONTOH / SIMULASI"
+      }
+    },
+    {
+      "id": "demo-gambar-ai",
+      "caption": "Foto viral: ikan raksasa terdampar di pantai",
+      "image": "/demo/gambar-ai.jpg",
+      "dossier": {
+        "schema_version": 2,
+        "id": "AMBA-20261030-DMO5",
+        "timestamp": "2026-10-30T07:25:10Z",
+        "input_type": "FILE",
+        "source_reference": "Gambar yang diunggah",
+        "degraded": false,
+        "is_demo": true,
+        "verdict": {
+          "score": 85,
+          "status": "TAMPERED",
+          "short_title": "Contoh: foto viral buatan AI",
+          "explanation": "Content Credentials di dalam file menyatakan gambar ini dibuat dengan AI, jadi gambar ini bukan foto kejadian nyata. Klaim di gambarnya juga belum dibahas sumber terpercaya. Ini data simulasi.",
+          "explanation_simple": "Ada tanda jelas gambar ini dibuat dengan AI. Jangan anggap sebagai foto asli.",
+          "basis": [
+            "ela",
+            "ai"
+          ],
+          "not_checked": [],
+          "floors_applied": [
+            "AI_PROVENANCE"
+          ]
+        },
+        "pillars": {
+          "ela": {
+            "available": true,
+            "score": 0,
+            "reliability": 1,
+            "reliability_note": null,
+            "anomalies": []
+          },
+          "ai": {
+            "available": true,
+            "score": 95,
+            "reliability": 1,
+            "indicators": [
+              "Ikan dan pantai tampak seperti gambar, bukan foto"
+            ],
+            "caveat": "Indikatif, bukan bukti pasti",
+            "provenance": {
+              "kind": "AI_GENERATED",
+              "source": "c2pa",
+              "generator": "",
+              "camera": "",
+              "c2pa": true
+            },
+            "detector": null
+          },
+          "fact": {
+            "available": true,
+            "claim": "Ikan raksasa terdampar di pantai",
+            "status": "UNVERIFIED",
+            "sources": []
+          },
+          "link": {
+            "available": false,
+            "score": 0,
+            "final_url": "",
+            "redirect_chain": [],
+            "reasons": []
+          }
+        },
+        "tactics": [],
+        "share_token": "",
+        "source_metadata": null,
+        "ocr_text": "IKAN RAKSASA TERDAMPAR! CONTOH / SIMULASI"
+      }
+    },
+    {
+      "id": "demo-tautan",
+      "caption": "Akun Anda akan diblokir. Verifikasi sekarang di tautan berikut.",
+      "dossier": {
+        "schema_version": 2,
+        "id": "AMBA-20261030-DMO3",
+        "timestamp": "2026-10-30T07:24:00Z",
+        "input_type": "URL",
+        "source_reference": "https://bri-verifikasi.example/login",
+        "degraded": false,
+        "is_demo": true,
+        "verdict": {
+          "score": 80,
+          "status": "TAMPERED",
+          "short_title": "Contoh: tautan meniru halaman masuk bank",
+          "explanation": "Alamat tautan memakai nama bank dengan kata umpan dan mengarah ke halaman masuk. Bukti dari tautan saja sudah cukup kuat untuk memberi peringatan. Domain .example tidak bisa didaftarkan siapa pun. Ini data simulasi.",
+          "explanation_simple": "Tautan ini punya tanda penipuan. Sebaiknya jangan diklik.",
+          "basis": [
+            "link"
+          ],
+          "not_checked": [],
+          "floors_applied": [
+            "LINK_STRONG"
+          ]
+        },
+        "pillars": {
+          "ela": {
+            "available": false,
+            "score": 0,
+            "reliability": 0,
+            "reliability_note": null,
+            "anomalies": []
+          },
+          "ai": {
+            "available": false,
+            "score": 0,
+            "reliability": 0,
+            "indicators": [],
+            "caveat": "",
+            "provenance": {
+              "kind": "NONE",
+              "source": "",
+              "generator": "",
+              "camera": "",
+              "c2pa": false
+            },
+            "detector": null
+          },
+          "fact": {
+            "available": false,
+            "claim": "",
+            "status": "UNVERIFIED",
+            "sources": []
+          },
+          "link": {
+            "available": true,
+            "score": 80,
+            "final_url": "https://bri-verifikasi.example/login",
+            "redirect_chain": [
+              "https://bri-verifikasi.example/login"
+            ],
+            "reasons": [
+              {
+                "code": "LOOKALIKE_BRAND",
+                "text": "Domain meniru nama layanan populer"
+              },
+              {
+                "code": "SCAM_KEYWORDS",
+                "text": "Nama situs memuat kata umpan seperti hadiah atau bansos"
+              },
+              {
+                "code": "SUSPICIOUS_PATH",
+                "text": "Alamat memuat kata yang sering dipakai penipuan"
+              }
+            ]
+          }
+        },
+        "tactics": [
+          {
+            "code": "FEAR",
+            "phrase": "Akun Anda akan diblokir",
+            "source": "text"
+          },
+          {
+            "code": "URGENCY",
+            "phrase": "Verifikasi sekarang",
+            "source": "text"
+          }
+        ],
+        "share_token": "",
+        "source_metadata": {
+          "status": "OK",
+          "platform": "web",
+          "via": "opengraph",
+          "title": "Akun Anda akan diblokir",
+          "author": "",
+          "description": "Verifikasi sekarang di tautan berikut.",
+          "site_name": "Contoh Simulasi"
+        },
+        "ocr_text": ""
+      }
+    },
+    {
+      "id": "demo-resmi",
+      "caption": "Tautan situs resmi: jadwal imunisasi anak",
+      "dossier": {
+        "schema_version": 2,
+        "id": "AMBA-20261030-DMO4",
+        "timestamp": "2026-10-30T07:26:00Z",
+        "input_type": "URL",
+        "source_reference": "https://www.kemkes.go.id/id/jadwal-imunisasi",
+        "degraded": false,
+        "is_demo": true,
+        "verdict": {
+          "score": 0,
           "status": "SAFE",
-          "short_title": "Contoh: pengumuman jadwal",
-          "explanation": "Pesan ini berisi informasi jadwal tanpa tekanan waktu atau permintaan data pribadi. Tetap periksa ke pengurus setempat. Ini data contoh.",
-          "explanation_simple": "Tidak ditemukan tanda bahaya, tapi tetap bijak sebelum menyebarkan.",
-          "basis": ["ai", "fact"],
-          "not_checked": ["ela", "link"],
+          "short_title": "Contoh: tautan situs resmi",
+          "explanation": "Tautan mengarah ke situs pemerintah tanpa tanda penipuan, dan klaim di halamannya didukung sumber contoh. Tetap cek tanggal dan isi halamannya. Ini data simulasi.",
+          "explanation_simple": "Tidak ditemukan bantahan cek fakta atau tanda bahaya pada tautan. Artikel terpercaya sejalan dengan klaim ini.",
+          "basis": [
+            "fact",
+            "link"
+          ],
+          "not_checked": [],
           "floors_applied": []
         },
         "pillars": {
-          "ela": {"available": false, "score": 0, "reliability": 0, "reliability_note": null, "anomalies": []},
-          "ai": {"available": true, "score": 6, "indicators": [], "caveat": "Indikatif, bukan bukti pasti"},
-          "fact": {"available": true, "claim": "Posyandu diadakan Sabtu pukul 8 pagi", "status": "SUPPORTS", "sources": [{"title": "Contoh pengumuman kelurahan", "publisher": "Sumber Contoh", "url": "https://example.org/contoh-pengumuman", "match": "SUPPORTS"}]},
-          "link": {"available": false, "score": 0, "final_url": "", "redirect_chain": [], "reasons": []}
+          "ela": {
+            "available": false,
+            "score": 0,
+            "reliability": 0,
+            "reliability_note": null,
+            "anomalies": []
+          },
+          "ai": {
+            "available": false,
+            "score": 0,
+            "reliability": 0,
+            "indicators": [],
+            "caveat": "",
+            "provenance": {
+              "kind": "NONE",
+              "source": "",
+              "generator": "",
+              "camera": "",
+              "c2pa": false
+            },
+            "detector": null
+          },
+          "fact": {
+            "available": true,
+            "claim": "Imunisasi dasar anak gratis di posyandu",
+            "status": "SUPPORTS",
+            "sources": [
+              {
+                "title": "Contoh pengumuman resmi",
+                "publisher": "Sumber Contoh",
+                "url": "https://example.org/contoh-cek-fakta",
+                "match": "SUPPORTS"
+              }
+            ]
+          },
+          "link": {
+            "available": true,
+            "score": 0,
+            "final_url": "https://www.kemkes.go.id/id/jadwal-imunisasi",
+            "redirect_chain": [
+              "https://www.kemkes.go.id/id/jadwal-imunisasi"
+            ],
+            "reasons": []
+          }
         },
         "tactics": [],
-        "share_token": ""
+        "share_token": "",
+        "source_metadata": {
+          "status": "OK",
+          "platform": "web",
+          "via": "opengraph",
+          "title": "Jadwal imunisasi anak (contoh)",
+          "author": "",
+          "description": "Imunisasi dasar anak gratis di posyandu dan puskesmas.",
+          "site_name": "Contoh Simulasi"
+        },
+        "ocr_text": ""
       }
     }
   ]

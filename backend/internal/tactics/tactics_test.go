@@ -111,3 +111,11 @@ func TestVerifyAcceptsOCRSource(t *testing.T) {
 		t.Fatalf("ocr tactic not kept: %+v", got)
 	}
 }
+
+// The phrase comes back without the space that preceded it in the message.
+func TestPhraseHasNoLeadingSpace(t *testing.T) {
+	got := Verify([]models.Tactic{{Code: "URGENCY", Phrase: "segera", Source: "text"}}, "Transfer sekarang, segera ya.")
+	if len(got) != 1 || got[0].Phrase != "segera" {
+		t.Fatalf("got %+v", got)
+	}
+}

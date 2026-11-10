@@ -1,11 +1,16 @@
 /// <reference lib="webworker" />
 /**
- * Minimal service worker for the PWA share target.
+ * Service worker with two jobs:
  *
- * It does not precache the app (the SPA is small and static hosting already
- * caches assets). Its only job is to accept the OS share POST, hold the item
- * for a few seconds in Cache Storage, and redirect into /deteksi.
+ * 1. PWA share target: accept the OS share POST, hold the item for a few
+ *    seconds in Cache Storage, and redirect into /deteksi (TECH_SPEC §8.1).
+ * 2. Offline app shell: precache this build's own static files so the demo
+ *    cases, Edukasi work without a connection (PRD F8, F15).
+ *    Only the app's own files are cached; API responses and user content
+ *    never are.
  */
+import { immutable, assets } from '$app/manifest';
+import { version } from '$app/env';
 import {
   SHARE_CACHE,
   SHARE_MAX_AGE_MS,
@@ -18,13 +23,32 @@ import {
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
+const APP_CACHE = `amba-app-${version}`;
+const SHELL = new URL('./', sw.registration.scope).pathname;
+const ASSETS = new Set(
+  [...immutable, ...assets].map(({ path }) => new URL(path, sw.registration.scope).pathname)
+);
+
 sw.addEventListener('install', (event) => {
-  event.waitUntil(sw.skipWaiting());
+  event.waitUntil(
+    (async () => {
+      try {
+        const cache = await caches.open(APP_CACHE);
+        await cache.addAll([...ASSETS, SHELL]);
+      } catch {
+        // Offline support is a bonus; a failed precache must not block install.
+      }
+      await sw.skipWaiting();
+    })()
+  );
 });
 
 sw.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      for (const key of await caches.keys()) {
+        if (key.startsWith('amba-app-') && key !== APP_CACHE) await caches.delete(key);
+      }
       await sw.clients.claim();
       await sweep();
     })()
@@ -37,13 +61,45 @@ sw.addEventListener('message', (event) => {
 
 sw.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'POST') return;
-
   const url = new URL(request.url);
-  if (!url.pathname.endsWith('/share-target')) return;
 
-  event.respondWith(handleShare(request));
+  if (request.method === 'POST') {
+    if (url.pathname.endsWith('/share-target')) event.respondWith(handleShare(request));
+    return;
+  }
+  if (request.method !== 'GET' || url.origin !== sw.location.origin) return;
+
+  // Hashed build files and static assets never change for this version.
+  if (ASSETS.has(url.pathname)) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+  // Navigations: always try the network (fresh deploys win), fall back to the
+  // cached shell so the SPA still opens offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          return await fetch(request);
+        } catch {
+          const cached = await caches.match(SHELL);
+          return cached ?? Response.error();
+        }
+      })()
+    );
+  }
 });
+
+async function cacheFirst(request: Request): Promise<Response> {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) {
+    const cache = await caches.open(APP_CACHE);
+    void cache.put(request, response.clone());
+  }
+  return response;
+}
 
 async function handleShare(request: Request): Promise<Response> {
   try {

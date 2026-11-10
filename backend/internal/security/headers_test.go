@@ -144,3 +144,13 @@ func TestCORSExposesRetryAfter(t *testing.T) {
 		t.Fatalf("expose-headers = %q, want Retry-After", got)
 	}
 }
+
+func TestCORSExtraOriginsAreExact(t *testing.T) {
+	cfg := NewCORSConfig("https://amba.example", false).WithOrigins("https://amba.vercel.app", "https://evil.example:*")
+	if !cfg.allowed("https://amba.vercel.app") || !cfg.allowed("https://amba.example") {
+		t.Fatal("configured origins must be allowed")
+	}
+	if cfg.allowed("https://evil.example:443") || cfg.allowed("https://preview-amba.vercel.app") {
+		t.Fatal("extra origins must be exact; wildcards are refused")
+	}
+}

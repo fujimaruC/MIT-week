@@ -40,33 +40,29 @@ type integrationStatus struct {
 
 // getOpsStatus serves GET /api/v1/ops/status.
 //
-// The gateway's /models call is best-effort: a cold or briefly busy 9router
+// The gateway's /models call is best-effort: a cold or briefly busy gateway
 // would otherwise make a healthy server look misconfigured. The live audit
 // path is the real health signal, so a failed probe is reported as "unknown"
 // rather than "not found".
 func (h *handlers) getOpsStatus(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
 	defer cancel()
-	info := h.llm.HealthCheck(ctx)
-	probeFailed := !h.llm.Mock && !info.Found && info.Count == 0
+	client := h.pipeline.LLM
+	reachable, listed := client.HealthCheck(ctx)
+	probeFailed := !client.Mock && !reachable
 
 	llmMode := "live"
 	placeholder := false
-	if h.llm.Mock {
+	if client.Mock {
 		llmMode = "mock"
 		placeholder = true
 	}
-	vision := false
-	for _, c := range info.Capabilities {
-		if c == "vision" {
-			vision = true
-		}
-	}
 
+	searcher := h.pipeline.Searcher
 	retrieval := integrationStatus{
-		Enabled:    h.cfg.Retrieval && !h.cfg.LLMMock,
-		Configured: h.cfg.RetrievalURL != "",
-		Note:       "Pencarian berita lewat endpoint tetap, lalu disaring daftar sumber tepercaya.",
+		Enabled:    searcher != nil && searcher.Enabled(),
+		Configured: searcher != nil && searcher.Enabled(),
+		Note:       "Pencarian pemeriksa fakta dan berita, lalu disaring daftar sumber tepercaya.",
 	}
 	if !retrieval.Enabled {
 		retrieval.Placeholder = true
@@ -74,8 +70,8 @@ func (h *handlers) getOpsStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	safe := integrationStatus{
-		Enabled:    h.cfg.SafeBrowsing != "",
-		Configured: h.cfg.SafeBrowsing != "",
+		Enabled:    h.pipeline.SafeBrowsing.Enabled(),
+		Configured: h.pipeline.SafeBrowsing.Enabled(),
 		Note:       "Google Safe Browsing v4.",
 	}
 	if !safe.Enabled {
@@ -107,9 +103,9 @@ func (h *handlers) getOpsStatus(w http.ResponseWriter, r *http.Request) {
 		LLM: llmStatus{
 			Mode:        llmMode,
 			Model:       h.cfg.RouterModel,
-			Found:       info.Found,
+			Found:       listed,
 			ProbeFailed: probeFailed,
-			Vision:      vision,
+			Vision:      !client.Mock,
 			Reasoning:   h.cfg.Reasoning,
 			Placeholder: placeholder,
 		},
@@ -118,17 +114,7 @@ func (h *handlers) getOpsStatus(w http.ResponseWriter, r *http.Request) {
 		Pillars:      pillars,
 		Stats: map[string]any{
 			"pipeline": h.pipeline.Stats.Snapshot(),
-			"llm":      h.llm.Stats.Snapshot(),
+			"llm":      client.Stats.Snapshot(),
 		},
-	})
-}
-
-// getMetrics is mounted on the optional internal listener only.
-func (h *handlers) getMetrics(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"requests": h.requests.Load(),
-		"uptime_s": int64(time.Since(h.startedAt).Seconds()),
-		"pipeline": h.pipeline.Stats.Snapshot(),
-		"llm":      h.llm.Stats.Snapshot(),
 	})
 }

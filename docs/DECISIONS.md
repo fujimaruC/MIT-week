@@ -118,7 +118,10 @@ Demo data still shows CONTRADICTS with `example.org` sources because TECH_SPEC
 §9 requires demo sources to be placeholders labelled "Sumber Contoh"; demo
 dossiers are pre-baked and never pass through grounding.
 
-## 2026-11-01 · OPEN — link-only audits always return INSUFFICIENT
+## 2026-11-01 · RESOLVED 2026-11-08 — link-only audits always return INSUFFICIENT
+
+Resolved by the `LINK_STRONG` floor; see the 2026-11-08 entry below.
+
 Verified behaviour: a URL audit whose only available pillar is Link returns
 `INSUFFICIENT` with `score: null`, even when the link score is 85 and the
 reasons include a lookalike bank brand, a suspicious TLD and a verification
@@ -251,7 +254,10 @@ Decision: every surface maps to one of four roles — `--on-fill` (pastel fills)
 themes. Revisit: if a fifth surface family is introduced, add a role rather
 than a one-off hex.
 
-## 2026-11-05 · Demo case IDs differ from PRD F8
+## 2026-11-05 · SUPERSEDED 2026-11-08 — Demo case IDs differ from PRD F8
+
+The IDs now follow PRD F8; see the 2026-11-08 entry below.
+
 
 PRD F8 names `demo-tiktok`, `demo-berita-ig`, `demo-resmi`. The implementation
 ships `contoh-hoax-bantuan`, `contoh-tautan-mencurigakan`, `contoh-informasi-aman`
@@ -286,10 +292,10 @@ would also work; `-text` stays correct either way.
 
 ## 2026-11-06 · Maru is the engine; the model never supplies a source
 
-The gateway is 9router with the `Maru` combo. Four behaviours found by probing
+The gateway is an OpenAI-compatible LLM gateway with the `Maru` combo. Four behaviours found by probing
 it directly shaped the client, and each one is now covered by a test:
 
-1. **9router streams by default.** A request without `stream:false` returns
+1. **The gateway streams by default.** A request without `stream:false` returns
    `text/event-stream`, which the old client could not parse. Every call now
    sends `stream:false` explicitly *and* decodes an SSE body if the gateway
    streams anyway.
@@ -416,3 +422,454 @@ silent.
 reads it automatically, so any `docker compose up` / `restart` keeps
 `LLM_MOCK=false` and the key. `chmod 600`; it is never committed
 (`.gitignore` line 2).
+## 2026-11-08 · Strong link evidence may decide on its own (`LINK_STRONG`)
+
+Team decision ("bukti tautan kuat cukup"). When no weighted score exists
+(W < 0.30, typically a bare URL) and the link pillar scored at least 50, the
+link score becomes the score, capped at 85 so it never exceeds what a
+Safe Browsing hit or a link score >= 90 earns. It never produces SAFE and runs
+after the first three floors (TECH_SPEC §3.3 floor 3b). Vectors 9-12 cover 85,
+weak AI + 55, 45 (still INSUFFICIENT) and the 89 cap. Lead sentence: "Tautan
+ini punya tanda penipuan. Sebaiknya jangan diklik." Revisit: the threshold of
+50 if field data shows false alarms on ordinary links.
+
+## 2026-11-08 · Contract additions: `source_metadata` and `ocr_text`
+
+Both optional and nullable, added contract-first (OpenAPI → JSON Schema → Go
+→ Zod) in one commit. `source_metadata` carries the link's public preview
+(status OK | BLOCKED | UNAVAILABLE, platform, title, author, description,
+site name) so the result can say "Isi halaman tautan tidak dapat dibaca" and
+offer the screenshot route instead of pretending the content was checked.
+`ocr_text` is the model's reading of a screenshot; tactics found in it are
+labelled `source: "ocr"`.
+
+## 2026-11-08 · Search provider: Google Fact Check Tools, verified in Go
+
+The model never searches and never states a fact status. Go sends the
+model's `search_query` to Fact Check Tools (`claims:search`, Indonesian),
+keeps at most 5 allowlisted https results, and a second structured call
+classifies each one against the claim. Only URLs from that result set can be
+verified; with no result set nothing verifies (fail closed). This replaces
+the model-driven tool rounds sketched in TECH_SPEC §6. Revisit: a news search
+API could be added behind the same `Searcher` interface.
+
+## 2026-11-08 · Progressive SSE and per-step budgets
+
+Each pillar sends exactly one terminal `stage` event and its `partial` as soon
+as it finishes; a `: ping` heartbeat keeps proxies from closing a quiet
+stream. Budgets: ELA 4 s (a 12 MP photo takes about 1.4 s on a dev machine
+and longer on a shared-CPU host, so the spec's 0.8 s would drop it), link 2.5 s,
+metadata 2.5 s, model 9 s, search 2.5 s, classify 3 s, each bounded by the 12 s
+hard deadline minus a 300 ms reserve so the verdict always gets out.
+
+## 2026-11-08 · Demo IDs follow PRD F8, demos are generated
+
+`demo-tiktok`, `demo-berita-ig`, `demo-resmi`, plus `demo-tautan` for the link
+flow. The old `contoh-*` IDs remain as aliases. `go run ./cmd/gendemo` draws
+the synthetic screenshot, runs the real forensics and scorer, and writes both
+JSON copies, the screenshot and the Edukasi quiz images; CI regenerates them
+and fails on any diff, so a demo can never show a verdict the code would not
+give.
+
+## 2026-11-08 · Balas Sopan: model draft, validated, template fallback
+
+The model gets only the verified token payload (status, title, claim,
+sources). Drafts over 280 characters, with a URL outside the sources, or with
+certainty, score or shaming words are rejected and the status x tone
+template is used. The share link is not given to the model: a full token
+does not fit in 280 characters, and the share button already carries it.
+
+## 2026-11-08 · Proof card keeps the short disclaimer line
+
+PRD §10 asks for the full disclaimer "in footer and proof card", while F6 asks
+for an "INDIKATIF — bukan alat bukti hukum" line legible in a WhatsApp
+preview. A 100-word paragraph on a 1200x630 card is unreadable at preview
+size, so the card keeps the short line and its QR code opens the shared
+report, whose footer carries the full text verbatim. The footer of every page
+now shows the full §10 text in Indonesian (`lang="id"`), in both languages.
+
+## 2026-11-08 · English toggle, Indonesian by default
+
+P1 EN/ID toggle. Indonesian stays the default and the reference copy
+(STATUS.md rule 6 still holds for the default experience). English verdict
+text is rebuilt from the verdict codes rather than machine-translated from
+the server's Indonesian sentences, so nothing is invented. Polite replies
+stay Indonesian (they are sent to Indonesian chats) and the English UI says
+so. The choice is stored in `amba.lang` and applied before first paint.
+
+## 2026-11-08 · Deployment in scope: Vercel + Fly.io or Railway
+
+Team decision. The SPA stays static on Vercel; the API runs on Fly.io
+(Singapore, one warm machine so a cold start cannot eat the 12 s budget) or
+Railway. CSP `connect-src` is generated from `VITE_API_BASE_URL` at build
+time. Production refuses to boot with the mock model, without a signing key,
+or without an https `PUBLIC_APP_URL`. Client identity comes from the host's
+edge header (`Fly-Client-IP`, Railway's `X-Real-IP`), never from a header a
+client can append to. Guide: `docs/DEPLOY.md`.
+
+## 2026-11-08 · Telegram bot shares the audit pipeline
+
+P2. Webhook with Telegram's secret header (or long polling locally), the same
+pipeline and verdict as the web, a per-chat limit (3 then 1 per 10 s), photos
+and documents through the same upload validation, and a plain-text reply with
+the report link. Nothing is stored and chat IDs are never logged. Safe
+Browsing is free for non-commercial use only; commercial use would need Web
+Risk.
+
+## 2026-11-08 · PARTLY RESOLVED 2026-11-09 — the ELA score is a global mean
+
+TECH_SPEC §3.4 defines the ELA score as the image-wide mean difference x 3.5.
+A small pasted region lights up clearly in the heat map but barely moves the
+mean: the edited demo screenshot scores 3/100 although its price line glows
+as a bright box. Consequences: `ELA_CORROBORATED` (needs >= 70) almost never
+fires on ordinary photos, and the ELA pillar pulls a weighted score down even
+when the heat map shows an edit. Today the AI pillar (vision model) and the
+fact pillar carry such cases. Options: score the contrast between the hottest
+grid cells and the image's typical cells, or weight hotspots that overlap
+model anomaly boxes. Either changes §3.4 and needs new forensics tests with
+false-positive cases (text on flat backgrounds, PNG screenshots) before it
+ships.
+
+## 2026-11-09 · Default model: OpenRouter's free Nemotron 3.5 Super VL
+
+Team request: a free multimodal model through OpenRouter. Chosen:
+`nvidia/nemotron-3.5-super-vl:free` (released 15 Oct 2026): it takes images,
+lists `structured_outputs`/`response_format`, has a 1M-token context and showed
+about 1.6 s median latency and 99.8 % availability on OpenRouter. The free
+Gemma 4 endpoints also take images, but a third-party benchmark saw them
+answer none of its free-tier requests.
+
+`LLM_EXTRA_BODY` (a JSON object merged into every request; the contract
+fields always win) carries the OpenRouter specifics instead of hard-coding a
+provider: `models: [primary, "openrouter/free"]` falls back to OpenRouter's
+free router, which picks another free model with the needed features, and
+`reasoning: {enabled: false}` keeps answers inside the 9 s model budget. Only
+`:free` models are listed, so a fallback can never be billed.
+
+Limits to know: 20 requests per minute and 50 per day on free models (1,000
+per day once the account has bought $10 of credit); one audit uses up to two
+calls. Not verified against the live API: this development environment
+cannot reach openrouter.ai, so the first real check is the boot readiness log
+and the smoke tests in `docs/DEPLOY.md` §6. Revisit: when the free model is
+retired, when the quota is too small, or if the free provider's data policy
+conflicts with the privacy copy on `/tentang`.
+
+## 2026-11-09 · Link heuristics tuned on real phishing and legitimate URLs
+
+Tested the static link pillar (no Safe Browsing, no model) on real data: a
+public phishing feed (mitchellkrogza/Phishing.Database, 789,052 active links;
+the 1,053 Indonesian-themed ones, the 10,406 on `.id` domains and a random
+3,000) and on legitimate URLs (the top 10,000 domains plus 60 official
+Indonesian bank, marketplace, government and news URLs).
+
+Findings and changes:
+- 56 % of the Indonesian-themed phishing links scored exactly 45 (a brand in
+  a non-official host, nothing else) and read "belum cukup data". The
+  `LINK_STRONG` threshold moves from 50 to 45; no legitimate URL in either set
+  reached 45 before the change.
+- TikTok and YouTube links showed "Tautan memuat karakter @ yang
+  menyesatkan" because of the `/@handle` segment. A handle segment no longer
+  counts.
+- `.my.id` and `.biz.id` hosted a third of the Indonesian-themed phishing and
+  none of the legitimate sites: now `SUSPICIOUS_TLD`.
+- Brands impersonated in the feed were added (BTN, BRImo, SeaBank, Akulaku,
+  Kredivo, Pegadaian, Kemensos, Prakerja, PLN, Telkomsel, IndiHome, Gojek),
+  with their official domains; Lazada's and Shopee's regional domains and the
+  word "telegraf" stopped being flagged.
+
+Result: a warning verdict for 83.6 % of the Indonesian-themed phishing links
+(was 25.4 %), 13.1 % of the `.id` ones (was 2.2 %) and 4.5 % of the random
+global sample (was 2.4 %); 4 of 10,060 legitimate URLs (dana.ir, bsi.ir,
+instabam.gr, online-instagram.com). Generic phishing on compromised or
+free-hosting domains has no tell-tale in the URL: that is what Safe Browsing
+is for, so `GOOGLE_API_KEY` matters in production.
+
+The same session ran server ELA on 7 real images from public forensics
+repositories (2 authentic, 5 edited, CASIA and TruFor samples). Scores were
+0 and 0 for the authentic images and 0-14 for the edited ones, so the global
+mean does not separate them (see the OPEN ELA entry above); the heat map lit
+the edited region of one CASIA sample fully, the other only at chance level.
+
+## 2026-11-09 · SUPERSEDED the same day — Deterministic scam rules and the `SCAM_PATTERN` floor
+
+A scam message has no claim to fact-check, so only the model read its
+wording, and the model scored "AI-generated likelihood". When the free
+gateway was down or out of its 50 daily requests, "kirimkan kode OTP itu ke
+saya" came back as "belum cukup data". `internal/scam` (TECH_SPEC §6.3) now
+recognises ten patterns of the scams sent most often to Indonesian phones,
+without the model: OTP/PIN/card requests, APK lures, wrong-transfer refunds,
+task jobs and job fees, implausible returns, prizes or aid with a fee or an
+unofficial link, loans with a fee up front, money requests from a "relative"
+or "officer", account-blocking notices pointing to an unofficial link or
+number, and a bank service line on a number the bank does not use.
+
+- Floor 2b `SCAM_PATTERN` = 80: inside `TAMPERED`, below the 85 of a fact
+  checker's verdict or a malicious link, because wording is weaker evidence.
+  It also applies when no weighted score exists. `verdict.scam_pattern`
+  (contract change) names the pattern; each has one plain sentence in the
+  explanation (Indonesian from the server, English rebuilt from the code).
+- The rules run before the model and again on the model's OCR; their cues
+  become highlighted tactics, so a scam still gets a verdict and highlights
+  during an outage.
+- Links written without `https://` (`bit.ly/x`, `bri-verifikasi.my.id`) were
+  never checked in text audits; they now get the link pillar, read as https.
+  An e-mail address is not a link.
+- Banks' own WhatsApp numbers look like ordinary mobile numbers, so they are
+  listed and checked (November 2026): Halo BCA 0811-1500-998 (bca.co.id),
+  BRI Sabrina 0812-1214-017 (Bisnis.com, 14 August 2024), Mandiri MITA
+  0811-8414-000 (bankmandiri.co.id). Only these three banks' service lines
+  are checked for `UNOFFICIAL_CONTACT`.
+
+Measured honestly: each new set of messages was written before the rule
+changes it led to and measured once on first sight. Set 3 (account threats,
+new fees, customs) caught 0 of 15 and raised 5 false alarms in 25 ordinary
+messages (registration fees, a utility reminder), which led to the
+account-threat pattern and to the rule that a threat with a payment needs an
+unofficial destination. Sets 4-6 then caught 11/20, 10/20 and 14/25 on first
+sight, with 0, 0 and 1 false alarms (a stand job paid per day). Everyday
+probes found code requests that were not secrets: a location pin, a Wi-Fi or
+Zoom password, a card-data warning. All sets are regression tests now
+(`internal/scam/scam_test.go`).
+
+So the rules catch about half of the scams they have not seen, with about 1
+false alarm in 65 ordinary messages; the model and the link check have to do
+the rest. Revisit: when real user reports show a pattern the rules miss or a
+false alarm, add the message to the tests first.
+
+## 2026-11-09 · One-sided image analysis; the AI score measures manipulation risk
+
+Two pillars pulled verdicts the wrong way on real inputs.
+
+ELA: on real images the global mean was 0 for untouched photos and 0-14 for
+edited ones (the demo's pasted price line scores 3), yet it carried weight
+0.30 in the mean. A low ELA therefore dragged scores down and, with a clean
+link, could make an image SAFE with no fact check at all. Now ELA only
+counts as evidence of editing, from 50 up (`scoring.ELAEvidenceMin`). Below
+that it is reported as checked, carries no weight, and only counts as
+coverage for SAFE; SAFE also needs an available fact check (the ELA+Link
+route is gone). The evidence card says that a low average is not proof of an
+original and that small edits often show only in the heat view. A localised
+score was tried on the same images: the hottest-cell-to-mean ratio was 64
+and 9.8 for the two untouched photos and 2.7 for an edited one, so contrast
+alone measures texture, not edits. A texture-normalised score stays open
+until there is a labelled set large enough to test it on.
+
+AI: the model scored how likely content was made or changed by AI, which is
+near 0 for a hand-typed scam, so the pillar pulled scam messages towards
+SAFE. `ai_score` now follows a written rubric of manipulation risk (scam,
+hoax and edit signs, with AI generation as one of them; warnings about scams
+are not scams), and the UI calls the pillar "Penilaian AI". Its weight and
+reliabilities are unchanged, and it never produces a verdict on its own.
+
+Vectors 15-17 (TECH_SPEC §3.5) pin the new behaviour. Revisit: with a
+labelled image set, or if the rubric scores drift on real traffic.
+
+## 2026-11-09 · The link check reads the destination page
+
+The phishing feed showed that phishing on hacked or free-hosting sites has
+nothing suspicious in its address. The page gives it away: a bank's name
+over a password field. When the redirect chain ends on a host that is not
+official, the pipeline now reads that page once (SSRF-safe client, at most
+512 KB, inside the 2.5 s link budget) and looks only at its title, site name
+and input fields. A field for a password, PIN, OTP, card number or CVV adds
+`PAGE_ASKS_SECRET` (20); with a brand named in the title it is
+`PAGE_IMPERSONATION` (45, high severity, as strong as a lookalike domain).
+Official domains are never fetched for this, and nothing of the page is
+kept. "dana", "pajak", "qris" and "permata" are ordinary words in titles, so
+they are not brands there.
+
+Trade-off: the server now loads a phishing page the user has not opened.
+Unrolling the link already requested it, so a scammer could already see a
+visit; the page is never rendered or stored. Not measured on live phishing
+pages: this environment cannot reach them. Revisit: after the first
+production week, with the reason counts from the metrics endpoint.
+
+## 2026-11-09 · SUPERSEDED the same day — Scam rules measured on real SMS
+
+The synthetic sets above are mine. To measure on real messages, the rules
+ran on a public corpus of Indonesian SMS from 2013-2016
+(`dataset_sms_spam_v1.csv` in the GitHub repository
+Andikazidanef15/Sentiment-Analysis-on-Indonesian-SMS-Dataset; 569 personal
+messages, 239 operator promos, 335 fraud and spam). The corpus is not copied
+into the repository.
+
+- First sight: 0 of the 808 personal and promo messages flagged, 79 of the
+  335 fraud/spam messages.
+- The corpus was split by row (even rows to tune, odd rows held out). Tuning
+  added SMS shorthand for prizes ("M-dptkan hadiah", "PIN pemenang",
+  "hadiah ke-2", "cek Rp 27 jt"), top-ups for a "new number", payments
+  "sudah saya kuasakan" to someone else, and a new pattern `CALL_FORWARD`
+  for dial codes that carry a phone number (`*886*…*08…#`, `**21*…#`), which
+  divert calls and SMS, OTP codes included. A dot followed by a letter or
+  digit ("No.anda", "Rp.1.500.000") no longer ends a sentence.
+- After tuning: still 0 of 808 flagged; the held-out half went from 40 to 80
+  of 168 fraud/spam messages (172 of 335 overall).
+
+The fraud/spam class also holds plain ads (loans, gadgets, gambling), the
+account numbers scammers send after a call (indistinguishable from an
+ordinary transfer request), fake buyers for a house, and summonses to call
+an "official". Those stay with the model. SMS-style regression tests use
+placeholder numbers, not the corpus text.
+
+## 2026-11-09 · Scope: links and images only
+
+Team decision (supersedes the two scam-rule entries above): AMBA checks two
+inputs, a **link** and an **uploaded image**, for three things:
+
+1. whether an image was generated by AI or is authentic (Jejak AI);
+2. whether an image is a hoax whose text was pasted over (Timpa Teks);
+3. whether a link is genuine or a fake or hoax (Keamanan Tautan, plus a fact
+   check of the claim the page or image carries).
+
+Removed: the text audit (`POST /audit/text`, `input_type: TEXT`, the Teks tab),
+the SMS and phone scam rules (`internal/scam`, the `SCAM_PATTERN` floor and
+`verdict.scam_pattern`), and Cek Cepat with Sandi Keluarga (PRD F3 and F15).
+Shared text without a link, a pasted text, and a Telegram message without a
+link are answered with "AMBA memeriksa tautan dan gambar". Links inside an
+image are still checked, also when written without `https://`. The demos are
+now two images and three links; the home, education and about copy talk about
+images and links instead of messages and calls. The pillars are named after
+the detections: "Jejak AI", "Teks ditimpa (ELA)", "Pengecekan fakta",
+"Pemeriksaan tautan". The PRD carries a scope note at the top.
+
+## 2026-11-09 · Jejak AI: what the file declares comes first
+
+Scope (see above): "is this image AI-generated or authentic?". The AI pillar
+now answers only that question, for the uploaded image or a link's preview
+image. It supersedes the "Penilaian AI" manipulation-risk rubric decided
+earlier the same day.
+
+Evidence, strongest first (TECH_SPEC §3.6):
+
+1. **What the file declares** (`internal/provenance`): Content Credentials
+   (C2PA in JPEG APP11, PNG `caBX`, WebP `C2PA`), IPTC `DigitalSourceType` in
+   XMP, a generator as XMP `CreatorTool` or EXIF `Software`, generator
+   settings in PNG text (Stable Diffusion, Fooocus, ComfyUI, InvokeAI,
+   NovelAI, Midjourney) or the EXIF user comment, and camera make and model.
+   Only metadata blocks are read, never pixels. Checked by hand on real
+   files: the c2pa-rs test image (algorithmicMedia) and its edited copy
+   (opened, no AI), three ComfyUI outputs (FLUX, SDXL), a Canon photo whose
+   EXIF ImageMagick copied into PNG text, and a Pixel 7 Pro photo; the unit
+   tests use crafted bytes of the same structures, and a fuzz target guards
+   against hostile files. A visible AI label ("Imagined with AI", "Dibuat
+   dengan AI", "AI生成") counts only when the model reports it and the
+   image's OCR text carries one.
+2. **An optional dedicated detector**: Sightengine's `genai` model, off
+   without credentials. The image goes to a third party, so the privacy
+   notice says so.
+3. **The model's visible clues**, with a written rubric: 0-15 an ordinary
+   photo, screenshot or design; 71-100 clear signs such as malformed hands,
+   gibberish lettering, impossible objects or an AI label. An ordinary edit
+   (pasted text, crop, filter) is not AI generation; it belongs to Timpa Teks.
+
+Missing metadata proves nothing (WhatsApp and social networks strip it), so it
+never lowers the score; camera data is only a hint and caps a visual judgement
+at 50. Floors apply to uploads only: `AI_PROVENANCE` (85), `AI_EDITED` (70) and
+`AI_LIKELY` (45, from a pillar score of 80). They run after `LINK_STRONG`, so a
+risky link in the same image keeps its score. A link's preview image is judged
+too, without floors: an AI illustration does not make a link a hoax.
+
+Open: the `AI_LIKELY` threshold (80) is set from the rubric, not yet measured
+against the live model on a labelled set, because no model key was available
+when this was built. Revisit with real traffic or a labelled set.
+
+Found on the way: WebP uploads were rejected because the standard library has
+no WebP decoder, although the UI accepts them. The size now comes from the
+VP8/VP8L/VP8X header; WebP is passed to the model and detector as is, and ELA
+is skipped for it (re-compressing as JPEG says nothing about a WebP file).
+
+## 2026-11-09 · Timpa Teks: compare the marked text with the image's other text
+
+The global ELA mean does not separate edited from authentic images (see the
+one-sided ELA entry above), and a localised hot-cell contrast measured
+texture, not edits. What gives a pasted line away is that it was compressed
+fewer times than the text around it: a news graphic's lines are all drawn at
+once, a retyped price is added after the graphic circulated.
+
+`forensics.TextEvidence` therefore compares, for each box the model marks as
+looking pasted, the text's reaction to one more JPEG compression (q75 and
+q90, normalised by edge strength) with the reaction of the other text-like
+blocks of the same image. Benchmark: `tools/textbench/gen.py` builds, from 34
+real camera photos (ianare/exif-samples), a caption-bar graphic saved by a
+publisher and recompressed by a messenger, and the same graphic with its price
+covered and retyped in an editor, forwarded again about half the time. Two
+sets with different seeds: the thresholds were set on the first and checked on
+the second.
+
+| | set 1 | set 2 |
+|---|---|---|
+| original lines with evidence ≥ 50 | 0 / 34 | 0 / 34 |
+| retyped lines ≥ 50 (≥ 70) | 22 / 34 (21) | 14 / 34 (11) |
+| ... not forwarded after the edit | 15 / 21 | 9 / 18 |
+| ... forwarded once more | 7 / 13 | 5 / 16 |
+
+Ratios over the median of the other text: originals 0.87-1.34, retyped lines
+0.89-7.0. Boxes 30 % too large or shifted by a tenth gave the same picture. A
+box without lettering (photo texture) is not measured, since it would always
+stand out against text.
+
+So evidence 70 is a strong sign and becomes a hotspot for `ELA_CORROBORATED`
+(the model and the measurement point at the same text); evidence 50 counts in
+the ELA weight; low evidence says little, because a forward or a resize after
+the edit can erase the difference. The demo screenshot's pasted price now
+measures 100, and its verdict carries `ELA_CORROBORATED`. Revisit with real
+hoax images from fact-checkers once there is a labelled set.
+
+## 2026-11-09 · Domain age from RDAP
+
+Throwaway phishing and hoax sites are typically registered days or weeks
+before they are used; the sites people trust are years old. The link check
+now asks the domain's registry over RDAP (no key, IANA's bootstrap file finds
+the registry) when the registrable domain was registered, for the first and
+the final host of the redirect chain, beside the redirect check and inside
+the link budget. `NEW_DOMAIN` (≤ 30 days, 25 points) and `YOUNG_DOMAIN`
+(≤ 180 days, 10) take the youngest domain on the chain, so an old shortener
+or redirector does not vouch for a new destination. Official domains and
+shorteners are not looked up.
+
+A young domain alone never reaches `LINK_STRONG` (45): new shops and campaign
+sites exist. With a lookalike brand (45) it adds up to a clear warning.
+
+Privacy: only the registrable domain goes to the registry (never the path,
+query or the user's text), answers are not kept, failures are logged with a
+status code only, and `DOMAIN_AGE_LOOKUP=false` switches it off. The privacy
+notice on /tentang says so. Tested with a fake registry; the development
+environment cannot reach real RDAP servers, so live coverage per TLD (.id in
+particular) still has to be checked after deploy.
+
+## 2026-11-10 · Video thresholds from 33 labelled clips, creator disclosure and web provenance
+
+Data: three runs of the old pipeline over 33 social clips (11 real news, 10 AI,
+12 hoax; labels verified by a second reviewer), pooled to 33 real, 30 AI and 36
+hoax readings.
+
+| AI score line | real flagged | AI flagged | hoax flagged |
+|---|---|---|---|
+| 45 | 2/33 | 18/30 | 6/36 |
+| 50 to 65 | 1/33 | 16/30 | 2/36 |
+| 70, 75 | 1/33 | 14/30 | 2/36 |
+| 80 (old) | 0/33 | 7/30 | 2/36 |
+
+- `VideoAILikelyMin = 55` (video only). The plateau is 50 to 65. At 80 only 23%
+  of AI clips were flagged; at 55, 53%. The image line `AILikelyMin` stays 80:
+  this set has no image rows. `AI_LIKELY` lifts the score to 45 only, never to
+  `TAMPERED`.
+- `VideoManipulationMin = 70`, unchanged: real news never exceeded 60.
+- `VideoContextMin = 85` (was 70): real news scored 75 and 80 for context twice
+  (same clip). Context mismatch is the noisiest signal, so it trades recall for
+  precision.
+- Combined (55, 70, 85): real 1/33 (3.0%), AI 16/30 (53%), hoax 7/36 (19%). Old
+  combined (80, 70, 70): real 2/33, AI 10/30, hoax 10/36.
+- Creator disclosure (deterministic, `video/disclosure.go`): a strong
+  disclosure sets provenance source `creator` and the `AI_PROVENANCE` floor (85);
+  a weak one adds 8 to the AI score when the model answered. On the same URLs:
+  strong on 9/10 AI clips, 0/11 real, 0/12 hoax. The AI class is official
+  generator channels, so this is an upper bound; anonymous reposts carry no such
+  text.
+- Web provenance (`pipeline/webprov.go`): the title or first description
+  sentence, with links, hashtags and emoji removed (3 to 10 words), plus
+  " video AI hoaks", searched on Tavily over a 26-host allowlist. Hits pass
+  `SameTopic`, then a model classification (AI, REAL, HOAX, UNRELATED); HOAX also
+  needs a fact-checker host. Any failure returns no evidence and never marks the
+  audit degraded. This signal is not measured by the offline set.
+- 90% overall accuracy is not claimed. The web search needs a live run.

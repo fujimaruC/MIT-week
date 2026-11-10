@@ -194,3 +194,19 @@ func TestParseBlockedDecimalAndHexIPs(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateFetchURLRefusesInternalTargets(t *testing.T) {
+	for _, raw := range []string{
+		"http://127.0.0.1/admin", "http://[::1]/", "http://10.0.0.5/", "http://169.254.169.254/latest/meta-data",
+		"http://localhost:8080/", "https://printer.local/", "http://metadata.google.internal/", "http://router.home.arpa/",
+	} {
+		if _, err := ValidateFetchURL(raw); err == nil {
+			t.Errorf("ValidateFetchURL(%q) accepted an internal target", raw)
+		}
+	}
+	for _, raw := range []string{"https://kompas.com/a", "http://8.8.8.8/", "https://example.org:8443/x"} {
+		if _, err := ValidateFetchURL(raw); err != nil {
+			t.Errorf("ValidateFetchURL(%q) refused a public target: %v", raw, err)
+		}
+	}
+}

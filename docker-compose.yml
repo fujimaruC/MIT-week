@@ -5,24 +5,50 @@ services:
       context: ./backend
       target: prod
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      # Loopback by default: the public path is nginx (headers, upload limit).
+      - "${BACKEND_PORT:-127.0.0.1:8080}:8080"
     environment:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - ENVIRONMENT=${ENVIRONMENT:-development}
-      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://localhost}
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://localhost:${FRONTEND_PORT:-80}}
       - LLM_MOCK=${LLM_MOCK:-true}
       - NINEROUTER_API_KEY=${NINEROUTER_API_KEY:-}
-      - NINEROUTER_MODEL=${NINEROUTER_MODEL:-Maru}
-      - NINEROUTER_REASONING_EFFORT=${NINEROUTER_REASONING_EFFORT:-low}
-      - NINEROUTER_BASE_URL=${NINEROUTER_BASE_URL:-http://host.docker.internal:20128/v1}
+      - NINEROUTER_MODEL=${NINEROUTER_MODEL:-nvidia/nemotron-3.5-super-vl:free}
+      - NINEROUTER_BASE_URL=${NINEROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - LLM_EXTRA_BODY=${LLM_EXTRA_BODY:-}
+      - LLM_FALLBACK_BASE_URL=${LLM_FALLBACK_BASE_URL:-}
+      - LLM_FALLBACK_API_KEY=${LLM_FALLBACK_API_KEY:-}
+      - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-}
+      - LLM_FALLBACK_EXTRA_BODY=${LLM_FALLBACK_EXTRA_BODY:-}
+      - LLM_AUDIO_INPUT=${LLM_AUDIO_INPUT:-false}
+      - LLM_FALLBACK_AUDIO_INPUT=${LLM_FALLBACK_AUDIO_INPUT:-false}
+      - VIDEO_TIMEOUT_MS=${VIDEO_TIMEOUT_MS:-60000}
       - REPORT_SIGNING_KEY=${REPORT_SIGNING_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_FACTCHECK_KEY=${GOOGLE_FACTCHECK_KEY:-}
       - GOOGLE_SAFE_BROWSING_KEY=${GOOGLE_SAFE_BROWSING_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - TAVILY_API_KEY_2=${TAVILY_API_KEY_2:-}
+      - SIGHTENGINE_API_USER=${SIGHTENGINE_API_USER:-}
+      - SIGHTENGINE_API_SECRET=${SIGHTENGINE_API_SECRET:-}
+      - DOMAIN_AGE_LOOKUP=${DOMAIN_AGE_LOOKUP:-true}
+      - CORS_EXTRA_ORIGINS=${CORS_EXTRA_ORIGINS:-}
+      # nginx overwrites X-Real-IP with the caller's address. To rate-limit
+      # per user behind it, set TRUSTED_PROXY_CIDRS=172.16.0.0/12 and
+      # CLIENT_IP_HEADER=X-Real-IP, and stop publishing port 8080.
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-}
+      - CLIENT_IP_HEADER=${CLIENT_IP_HEADER:-}
+      - METRICS_ADDR=${METRICS_ADDR:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_MODE=${TELEGRAM_MODE:-polling}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
       - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-10}
       - HARD_TIMEOUT_MS=${HARD_TIMEOUT_MS:-20000}
+      - NINEROUTER_REASONING_EFFORT=${NINEROUTER_REASONING_EFFORT:-low}
       - FACT_RETRIEVAL=${FACT_RETRIEVAL:-true}
       - FACT_SEARCH_URL=${FACT_SEARCH_URL:-https://www.bing.com/news/search}
-      - METRICS_ADDR=${METRICS_ADDR:-}
       - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-600}
     extra_hosts:
       - "host.docker.internal:host-gateway"

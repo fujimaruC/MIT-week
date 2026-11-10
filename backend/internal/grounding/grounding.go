@@ -23,6 +23,17 @@ var DefaultAllowlist = []string{
 	"tirto.id",
 }
 
+// / WebAllowlist is the wider set the video web-provenance search may cite:
+// Indonesian and international newsrooms and fact-checkers. It is not used
+// for the claim fact check, which keeps DefaultAllowlist.
+var WebAllowlist = []string{
+	"kompas.com", "detik.com", "cnnindonesia.com", "tempo.co", "liputan6.com", "antaranews.com",
+	"tribunnews.com", "kumparan.com", "suara.com", "okezone.com", "cnbcindonesia.com",
+	"turnbackhoax.id", "cekfakta.com", "komdigi.go.id", "kominfo.go.id", "tirto.id",
+	"bbc.com", "bbc.co.uk", "reuters.com", "apnews.com", "factcheck.afp.com", "snopes.com",
+	"politifact.com", "leadstories.com", "factcheck.org", "fullfact.org",
+}
+
 // Grounder verifies candidate sources against an allowlist.
 type Grounder struct {
 	allowed map[string]bool
@@ -38,18 +49,25 @@ func New(allowlist []string) *Grounder {
 	return &Grounder{allowed: m}
 }
 
-// Verified reports whether rawURL is https and its registrable host is
-// allowlisted. toolURLs is the set of URLs the model's own tools returned:
-// a source the model invented cannot pass even if its host is allowlisted.
+// Verified reports whether rawURL is https, its host is allowlisted AND it
+// is one of toolURLs: the URLs AMBA's own search returned (TECH_SPEC §6 (a)).
+// A source the model invented cannot pass even if its host is allowlisted.
+// A nil or empty tool set fails closed: no search, no verified source.
 func (g *Grounder) Verified(rawURL string, toolURLs map[string]bool) bool {
-	if rawURL == "" {
+	if rawURL == "" || len(toolURLs) == 0 || !toolURLs[rawURL] {
 		return false
 	}
+	return g.HostAllowed(rawURL)
+}
+
+// HostAllowed reports whether rawURL is https on an allowlisted host. It is
+// the filter applied to search results before anyone sees them.
+func (g *Grounder) HostAllowed(rawURL string) bool {
 	u, err := url.Parse(rawURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 		return false
 	}
-	if toolURLs != nil && !toolURLs[rawURL] {
+	if p := u.Port(); p != "" && p != "443" {
 		return false
 	}
 	return g.hostAllowed(strings.ToLower(u.Hostname()))

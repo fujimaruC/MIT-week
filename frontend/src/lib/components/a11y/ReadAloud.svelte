@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { speechAvailable, speak, stopSpeaking } from '$lib/a11y.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -29,6 +30,6 @@
 {#if supported}
   <button type="button" class="btn btn--quiet btn--sm" onclick={toggle} aria-pressed={speaking}>
     <Icon name={speaking ? 'volume-off' : 'speaker'} size={18} />
-    {speaking ? 'Hentikan bacaan' : 'Bacakan hasil'}
+    {speaking ? t('read.stop') : t('read.start')}
   </button>
 {/if}

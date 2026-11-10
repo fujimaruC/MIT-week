@@ -139,7 +139,7 @@ func (s *Searcher) Search(ctx context.Context, query string) ([]Item, error) {
 		if link == "" || seen[link] {
 			continue
 		}
-		if !s.Grounder.Verified(link, nil) {
+		if !s.Grounder.HostAllowed(link) {
 			continue
 		}
 		title := strings.TrimSpace(htmlText(raw.Title))

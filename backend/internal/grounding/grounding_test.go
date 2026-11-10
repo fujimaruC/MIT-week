@@ -40,18 +40,44 @@ func TestVerifiedRequiresAllowlistedHost(t *testing.T) {
 
 func TestSubdomainOfAllowedHostIsAccepted(t *testing.T) {
 	g := New([]string{"kompas.com"})
-	if !g.Verified("https://news.kompas.com/a", nil) {
+	if !g.HostAllowed("https://news.kompas.com/a") {
 		t.Error("subdomain should be accepted")
 	}
-	if g.Verified("https://notkompas.com/a", nil) {
+	if g.HostAllowed("https://notkompas.com/a") {
 		t.Error("a suffix without a dot boundary must not be accepted")
 	}
 }
 
 func TestEmptyAllowlistRejectsEverything(t *testing.T) {
 	g := New(nil)
-	if g.Verified("https://antaranews.com/x", nil) {
+	if g.HostAllowed("https://antaranews.com/x") {
 		t.Error("empty allowlist accepted a host")
+	}
+}
+
+// The tool-result check used to be skipped by passing nil, which let an
+// invented URL on a trusted host count as a verified contradiction.
+func TestVerifiedFailsClosedWithoutToolResults(t *testing.T) {
+	g := New(DefaultAllowlist)
+	for _, tools := range []map[string]bool{nil, {}} {
+		if g.Verified("https://turnbackhoax.id/2026/01/01/invented", tools) {
+			t.Fatalf("verified a source with tool set %v", tools)
+		}
+	}
+}
+
+func TestHostAllowedRejectsTricks(t *testing.T) {
+	g := New(DefaultAllowlist)
+	for _, raw := range []string{
+		"https://user@kompas.com/x",
+		"https://kompas.com:8443/x",
+		"http://kompas.com/x",
+		"https://kompas.com.evil.example/x",
+		"javascript:alert(1)",
+	} {
+		if g.HostAllowed(raw) {
+			t.Errorf("HostAllowed(%q) = true", raw)
+		}
 	}
 }
 

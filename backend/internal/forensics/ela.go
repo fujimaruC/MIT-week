@@ -46,19 +46,32 @@ type Result struct {
 // per-pixel difference. The caller supplies the original encoded bytes so the
 // decoder format can drive reliability.
 func Analyze(encoded []byte) (Result, error) {
+	src, format, err := Decode(encoded)
+	if err != nil {
+		return Result{}, err
+	}
+	return AnalyzeImage(src, format)
+}
+
+// Decode checks the dimensions from the header first, so an oversized image
+// is never decoded, then decodes it.
+func Decode(encoded []byte) (image.Image, string, error) {
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(encoded))
 	if err != nil {
-		return Result{}, err
+		return nil, "", err
 	}
 	if cfg.Width > MaxSide || cfg.Height > MaxSide || cfg.Width*cfg.Height > MaxPixels {
-		return Result{}, ErrTooLarge
+		return nil, "", ErrTooLarge
 	}
-
 	src, _, err := image.Decode(bytes.NewReader(encoded))
 	if err != nil {
-		return Result{}, err
+		return nil, "", err
 	}
+	return src, format, nil
+}
 
+// AnalyzeImage is Analyze on an image Decode already returned.
+func AnalyzeImage(src image.Image, format string) (Result, error) {
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, src, &jpeg.Options{Quality: JPEGQuality}); err != nil {
 		return Result{}, err

@@ -1,4 +1,5 @@
 import type { PillarKey } from './audit.svelte';
+import { t } from './i18n/index.svelte';
 
 /**
  * One honest line describing a pillar payload the server has already sent.
@@ -12,25 +13,21 @@ import type { PillarKey } from './audit.svelte';
 export function pillarSummary(key: PillarKey, data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const d = data as Record<string, unknown>;
-  if (d.available === false) return 'Tidak dapat diperiksa untuk konten ini.';
+  if (d.available === false) return t('summary.unavailable');
 
   switch (key) {
     case 'ai':
-      return typeof d.score === 'number' ? `Skor indikatif ${d.score}.` : null;
+      return typeof d.score === 'number' ? t('summary.ai', { n: d.score }) : null;
     case 'link':
-      return typeof d.score === 'number' ? `Skor tautan ${d.score}.` : null;
+      return typeof d.score === 'number' ? t('summary.link', { n: d.score }) : null;
     case 'ela':
       return typeof d.reliability === 'number'
-        ? `Keandalan ${Math.round(d.reliability * 100)}%.`
+        ? t('summary.ela', { n: Math.round(d.reliability * 100) })
         : null;
     case 'fact': {
       if (typeof d.status !== 'string') return null;
-      const map: Record<string, string> = {
-        CONTRADICTS: 'Klaim dibantah sumber terverifikasi.',
-        SUPPORTS: 'Klaim didukung sumber terverifikasi.',
-        UNVERIFIED: 'Belum ada sumber terverifikasi.'
-      };
-      return map[d.status] ?? null;
+      if (d.status !== 'CONTRADICTS' && d.status !== 'SUPPORTS' && d.status !== 'UNVERIFIED') return null;
+      return t(`summary.${d.status}`);
     }
   }
 }

@@ -4,322 +4,310 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { AuditSession } from '$lib/audit.svelte';
-  import { parseDossier } from '$lib/api/schemas';
   import { isMockMode } from '$lib/api/config';
-  import { result } from '$lib/result.svelte';
-  import { firstHttpUrl, readSharedItem } from '$lib/share-target';
-  import Field from '$lib/components/ui/Field.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
-  import ModeSelectorTabs, { type InputKind } from '$lib/components/deteksi/ModeSelectorTabs.svelte';
-  import DropzoneUploader from '$lib/components/deteksi/DropzoneUploader.svelte';
+  import { readSharedItem } from '$lib/share-target';
+  import { readLink, type LinkProblem } from '$lib/link-input';
+  import { takeHandedFile, imageProblem } from '$lib/handoff';
+  import { EXAMPLES, openExample } from '$lib/demos';
+  import { sessionHistory } from '$lib/session-history.svelte';
+  import { statusLabel } from '$lib/format';
+  import { t } from '$lib/i18n/index.svelte';
+  import PromptBar from '$lib/components/ui/PromptBar.svelte';
+  import Platforms from '$lib/components/ui/Platforms.svelte';
   import ScanningRadar from '$lib/components/deteksi/ScanningRadar.svelte';
-  import demoData from '$lib/data/demo-cases.json';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { Status } from '$lib/api/types';
 
   const session = new AuditSession();
 
-  let kind = $state<InputKind>('url');
   let url = $state('');
-  let text = $state('');
-  let file = $state<File | null>(null);
-  let inputError = $state<string | null>(null);
-  let sharedNotice = $state<string | null>(null);
+  let problem = $state<LinkProblem | null>(null);
+  let notice = $state<string | null>(null);
+  let fileError = $state<string | null>(null);
+  let dragging = $state(false);
+  // What is being checked: shown under the input, kept to retry.
+  type Sent = { kind: 'url'; url: string } | { kind: 'file'; file: File; preview: string };
+  let sent = $state<Sent | null>(null);
 
-  // The home hero hands a pasted link over as ?q=.
-  $effect(() => {
-    const q = page.url.searchParams.get('q');
-    if (q && !url) url = q;
+  // A link arrives as ?q=, an image picked on another page in memory
+  // (?from=prompt), a share as ?share=; each starts the check at once,
+  // because sending it was the explicit action.
+  onMount(() => {
+    if (page.url.searchParams.get('share')) return;
+    const handed = page.url.searchParams.get('from') === 'prompt' ? takeHandedFile() : null;
+    if (handed) {
+      void runFile(handed);
+      return;
+    }
+    const q = page.url.searchParams.get('q')?.trim();
+    if (q) void tick().then(() => runLink(q));
   });
 
-  // A share-target redirect carries a one-time cache id. Read and delete it,
-  // then start the audit immediately because sharing was an explicit action.
   onMount(() => {
     const id = page.url.searchParams.get('share');
     if (id) void openShared(id);
   });
 
+  // The contract parser (Zod) is not needed to paint this page; warm it idle.
+  onMount(() => {
+    const warm = () => void import('$lib/api/schemas').catch(() => {});
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 3000 });
+    else setTimeout(warm, 300);
+  });
+
+  $effect(() => {
+    const current = sent;
+    return () => {
+      if (current?.kind === 'file') URL.revokeObjectURL(current.preview);
+    };
+  });
+
   async function openShared(id: string): Promise<void> {
-    sharedNotice = 'Membuka konten yang dibagikan…';
+    notice = t('det.sharedOpening');
     const item = await readSharedItem(id);
-    if (!item) {
-      sharedNotice = null;
-      inputError = 'Konten yang dibagikan tidak ditemukan atau sudah kedaluwarsa. Tempel manual di bawah.';
+    notice = null;
+    const link = item ? readLink(item.url ?? item.text ?? '').url : null;
+    if (!item || (!item.file && !link)) {
+      notice = item ? t('link.err.notUrl') : t('det.sharedMissing');
       return;
     }
-
-    if (item.file) {
-      kind = 'file';
-      file = item.file;
-    } else if (item.url) {
-      kind = 'url';
-      url = item.url;
-    } else if (item.text) {
-      const found = firstHttpUrl(item.text);
-      if (found) {
-        kind = 'url';
-        url = found;
-      } else {
-        kind = 'text';
-        text = item.text;
-      }
-    }
-
-    sharedNotice = null;
-    await tick();
-    await submit();
+    if (item.file) await runFile(item.file);
+    else if (link) await runLink(link);
   }
 
-  async function pasteClipboard(): Promise<void> {
-    inputError = null;
-    try {
-      if (navigator.clipboard?.read) {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const type = item.types.find((t) => t.startsWith('image/'));
-          if (type) {
-            const blob = await item.getType(type);
-            const extension = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
-            kind = 'file';
-            file = new File([blob], `tempelan.${extension}`, { type });
-            return;
-          }
-        }
-      }
-
-      const value = (await navigator.clipboard.readText()).trim();
-      if (!value) {
-        inputError = 'Clipboard kosong. Salin tautan atau teks terlebih dahulu.';
-        return;
-      }
-      const found = firstHttpUrl(value);
-      if (found) {
-        kind = 'url';
-        url = found;
-      } else {
-        kind = 'text';
-        text = value;
-      }
-    } catch {
-      inputError = 'Tidak bisa membaca clipboard. Tempel manual dengan Ctrl+V atau tekan lama lalu pilih Tempel.';
-    }
+  async function runLink(raw: string): Promise<void> {
+    if (session.running) return;
+    const reading = readLink(raw);
+    problem = reading.problem;
+    if (!reading.url) return;
+    notice = null;
+    fileError = null;
+    url = reading.url;
+    sent = { kind: 'url', url: reading.url };
+    await session.start('url', { url: reading.url });
+    if (session.verdict) await goto(resolve('/hasil'));
   }
 
-  // Bundled example dossiers. Loading one makes zero network calls (PRD F8).
-  const demos = demoData.cases.map((c) => ({ id: c.id, label: c.caption, dossier: c.dossier }));
-
-  function openDemo(dossier: unknown): void {
-    try {
-      result.set(parseDossier(dossier), null);
-      void goto(resolve('/hasil'));
-    } catch {
-      // A bundled dossier that fails the contract is a build-time bug, not a
-      // user-facing failure. Say nothing and keep the form usable.
+  async function runFile(file: File): Promise<void> {
+    if (session.running) return;
+    const bad = imageProblem(file);
+    if (bad) {
+      fileError = t(bad === 'unsupported' ? 'drop.unsupported' : 'drop.tooLarge');
+      return;
     }
+    fileError = null;
+    notice = null;
+    sent = { kind: 'file', file, preview: URL.createObjectURL(file) };
+    await session.start('file', { file });
+    if (session.verdict) await goto(resolve('/hasil'));
   }
 
-  function validate(): string | null {
-    if (kind === 'url') {
-      const value = url.trim();
-      if (!value) return 'Tempel tautan yang ingin diperiksa.';
-      if (!/^https?:\/\//i.test(value)) return 'Tautan harus dimulai dengan http:// atau https://';
-      if (value.length > 2048) return 'Tautan terlalu panjang.';
-    }
-    if (kind === 'text') {
-      if (!text.trim()) return 'Tulis atau tempel pesan yang ingin diperiksa.';
-      if (text.length > 5000) return 'Teks terlalu panjang. Maksimal 5000 karakter.';
-    }
-    if (kind === 'file' && !file) return 'Pilih gambar terlebih dahulu.';
-    return null;
+  function retry(): void {
+    if (!sent) return;
+    if (sent.kind === 'url') void runLink(sent.url);
+    else void runFile(sent.file);
   }
 
-  async function submit(): Promise<void> {
-    inputError = validate();
-    if (inputError) return;
-    await session.start(kind, { url: url.trim(), text: text.trim(), file: file ?? undefined });
-    if (session.verdict) {
-      // goto() keeps the in-memory result store; a location.href reload would
-      // wipe it and land on "Hasil tidak tersimpan".
-      await goto(resolve('/hasil'));
-    }
+  function drop(e: DragEvent): void {
+    e.preventDefault();
+    dragging = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (file) void runFile(file);
   }
+
+  const tone = (s: Status): string => ({ SAFE: 'safe', SUSPICIOUS: 'warn', TAMPERED: 'danger', INSUFFICIENT: 'neutral' })[s];
 </script>
 
 <svelte:head>
-  <title>Periksa konten — AMBA</title>
-  <meta
-    name="description"
-    content="Tempel tautan, teks pesan, atau unggah tangkapan layar. AMBA menjelaskan tanda bahaya dengan kata sederhana."
-  />
+  <title>{t('det.title')}</title>
+  <meta name="description" content={t('det.description')} />
 </svelte:head>
 
-<section class="head">
-  <p class="eyebrow">Pemeriksaan</p>
-  <h1 class="h1">Periksa konten</h1>
-  <p class="lede">
-    Pilih jenis konten, lalu jalankan pemeriksaan. Hasilnya indikatif, bukan bukti pasti.
-  </p>
-</section>
+<div class="dash">
+  <h1 class="title">{t('det.h1')}</h1>
 
-{#if isMockMode}
-  <p class="notice" role="note">
-    <strong>Mode pratinjau.</strong> Pemeriksaan memakai aturan contoh di perangkat ini,
-    bukan server AMBA. Hasilnya diberi tanda CONTOH.
-  </p>
-{/if}
-
-<section class="console card" aria-label="Formulir pemeriksaan">
-  <div class="console-top">
-    <ModeSelectorTabs selected={kind} onselect={(k) => { kind = k; inputError = null; }} />
-    <Button variant="quiet" onclick={pasteClipboard}>
-      <Icon name="copy" size={18} /> Tempel dari clipboard
-    </Button>
-  </div>
-
-  {#if sharedNotice}
-    <p class="shared" aria-live="polite">{sharedNotice}</p>
+  {#if isMockMode}
+    <p class="notice" role="note"><strong>{t('det.previewTitle')}</strong> {t('det.previewBody')}</p>
   {/if}
 
-  {#if kind === 'url'}
-    <Field id="url" label="Tautan" type="url" bind:value={url} hint="Contoh: https://example.org/artikel" error={inputError ?? undefined} />
-  {:else if kind === 'text'}
-    <div class="field">
-      <label for="teks">Teks pesan</label>
-      <textarea
-        class="textarea"
-        id="teks"
-        rows="6"
-        bind:value={text}
-        aria-invalid={inputError ? 'true' : undefined}
-        placeholder="Tempel pesan yang Anda terima di sini."
-      ></textarea>
-      {#if inputError}<p class="error-text" role="alert">{inputError}</p>{/if}
-    </div>
+  <section
+    class="panel"
+    class:over={dragging}
+    aria-label={t('det.form')}
+    ondragover={(e) => { e.preventDefault(); dragging = true; }}
+    ondragleave={() => (dragging = false)}
+    ondrop={drop}
+  >
+    <PromptBar
+      id="url"
+      bind:value={url}
+      bind:problem
+      busy={session.running}
+      autofocus={!sent}
+      photo="button"
+      onlink={(link) => void runLink(link)}
+      onfile={(file) => void runFile(file)}
+      onstop={() => session.abort()}
+    />
+    <Platforms />
+    {#if dragging}<p class="info" role="status">{t('app.dropping')}</p>{/if}
+    {#if fileError}<p class="err" role="alert"><Icon name="alert" size={16} /> {fileError}</p>{/if}
+    {#if notice}<p class="info" role="status">{notice}</p>{/if}
+
+    {#if sent}
+      <div class="current">
+        {#if sent.kind === 'url'}
+          <span class="cur-item"><Icon name="link" size={18} /><span class="cur-text" class:shimmer={session.running}>{sent.url}</span></span>
+        {:else}
+          <span class="cur-item">
+            <span class="thumb" class:scanning={session.running}><img src={sent.preview} alt={t('chat.imageAlt')} /></span>
+            <span class="cur-text">{sent.file.name}</span>
+          </span>
+        {/if}
+        {#if session.running}
+          <button class="btn btn--sm" type="button" onclick={() => session.abort()}><Icon name="stop" size={16} />{t('det.cancel')}</button>
+        {/if}
+      </div>
+    {/if}
+
+    {#if session.error}
+      <div class="error-panel" role="alert">
+        <p class="error-title"><Icon name="alert" size={18} /> {t('det.errTitle')}</p>
+        <p>{session.error.message}</p>
+        {#if session.error.retryAfter}<p class="muted">{t('det.wait', { n: session.error.retryAfter })}</p>{/if}
+        <button class="btn btn--tonal btn--sm" type="button" onclick={retry}><Icon name="refresh" size={16} />{t('res.checkAgain')}</button>
+      </div>
+    {/if}
+    <p class="sr-only" aria-live="polite">{session.announcement}</p>
+  </section>
+
+  {#if sent}
+    <ScanningRadar stages={session.stages} partials={session.partials} running={session.running} />
   {:else}
-    <DropzoneUploader onselect={(f) => { file = f; inputError = null; }} />
-    {#if inputError}<p class="error-text" role="alert">{inputError}</p>{/if}
+    <div class="examples" role="group" aria-label={t('det.demos')}>
+      <span class="ex-label">{t('det.demos')}</span>
+      {#each EXAMPLES as ex (ex.id)}
+        <button class="chip-btn" type="button" onclick={() => openExample(ex.id)}><Icon name={ex.icon} size={16} /><span>{t(ex.label)}</span></button>
+      {/each}
+    </div>
   {/if}
 
-  <div class="demos">
-    <p class="demos-label">Coba contoh</p>
-    <ul>
-      {#each demos as demo (demo.id)}
-        <li>
-          <button class="demo-btn" type="button" onclick={() => openDemo(demo.dossier)}>
-            {demo.label}
-          </button>
-        </li>
-      {/each}
-    </ul>
-    <p class="demos-note">Contoh dimuat dari perangkat Anda, tanpa koneksi ke server.</p>
-  </div>
-
-  <div class="actions">
-    <Button size="lg" onclick={submit} loading={session.running}>
-      <Icon name="sparkle" size={18} />
-      {session.running ? 'Memeriksa…' : 'Mulai periksa'}
-    </Button>
-    {#if session.running}
-      <Button variant="quiet" onclick={() => session.abort()}>Batalkan</Button>
-    {/if}
-  </div>
-
-  <p class="live" aria-live="polite">{session.announcement}</p>
-</section>
-
-{#if session.running || session.done}
-  <ScanningRadar stages={session.stages} partials={session.partials} />
-{/if}
-
-{#if session.error}
-  <div class="error-panel" role="alert">
-    <p class="error-title">Pemeriksaan tidak selesai</p>
-    <p>{session.error.message}</p>
-    {#if session.error.retryAfter}
-      <p class="hint">Tunggu {session.error.retryAfter} detik sebelum mencoba lagi.</p>
-    {/if}
-  </div>
-{/if}
+  {#if sessionHistory.list.length}
+    <section class="sec" aria-labelledby="hist-title">
+      <div class="sec-head">
+        <h2 id="hist-title">{t('app.history')}</h2>
+        <button class="btn btn--sm btn--quiet" type="button" onclick={() => sessionHistory.clear()}>{t('app.history.clear')}</button>
+      </div>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th scope="col">{t('app.history.item')}</th>
+            <th scope="col">{t('app.history.verdict')}</th>
+            <th scope="col" class="num">{t('app.history.score')}</th>
+            <th scope="col"><span class="sr-only">{t('app.history.recheck')}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each sessionHistory.list as e (e.id)}
+            <tr>
+              <td class="item">
+                {#if e.demo}<span class="tag">{t('app.history.demo')}</span>{/if}
+                <span class="item-label">{e.label}</span>
+              </td>
+              <td><span class="vpill tone-{tone(e.status)}">{statusLabel(e.status)}</span></td>
+              <td class="num tabular">{#if e.score === null}<span class="muted">—</span>{:else}{e.score}<small>/100</small>{/if}</td>
+              <td class="act">
+                {#if e.url}
+                  <button class="btn btn--sm btn--quiet" type="button" disabled={session.running} aria-label={t('app.history.recheck')} title={t('app.history.recheck')} onclick={() => runLink(e.url)}><Icon name="refresh" size={18} /></button>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {/if}
+</div>
 
 <style>
-  .head { max-width: 54rem; margin-bottom: var(--space-6); }
-  h1 { margin-bottom: var(--space-3); }
-  .notice {
-    margin: 0 0 var(--space-5);
-    padding: var(--space-3) var(--space-4);
-    background: var(--yellow);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-hard-xs);
-    font-size: var(--text-sm);
-    max-width: 46rem;
+  .dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); max-width: 52rem; margin-inline: auto; }
+  .title { text-align: center; font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2.2rem); font-weight: 500; letter-spacing: -0.02em; }
+  .notice { margin: 0; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); }
+
+  .panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    min-width: 0;
+    padding: var(--space-5);
+    border: 1.5px dashed transparent;
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
   }
-  .console { padding: clamp(1.25rem, 3vw, 2rem); }
-  .console-top {
+  .panel.over { border-color: var(--indigo); background: var(--indigo-tint); }
+  .err { display: flex; gap: 6px; margin: 0; color: var(--err); font-size: var(--text-sm); font-weight: 500; }
+  .info { margin: 0; color: var(--body-2); font-size: var(--text-sm); text-align: center; }
+
+  .current {
+    min-width: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    margin-bottom: var(--space-5);
+    gap: var(--space-2) var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-soft);
   }
-  .console :global(.field) { margin-bottom: var(--space-5); }
-  .console > :global(.field) { margin-bottom: var(--space-5); }
-  .shared { margin: var(--space-3) 0 0; color: var(--body-2); font-size: var(--text-sm); }
-  .field { display: grid; gap: var(--space-2); margin-bottom: var(--space-5); }
-  label { font-weight: 700; }
-  .actions { display: flex; gap: var(--space-3); margin: var(--space-5) 0 0; flex-wrap: wrap; }
-  .live { min-height: 1.5em; color: var(--body-2); font-size: var(--text-sm); margin: var(--space-3) 0 0; }
-  .error-panel {
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--coral-tint);
-    box-shadow: var(--shadow-hard);
-    padding: var(--space-5);
-    margin-top: var(--space-5);
+  .cur-item { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 16rem; }
+  .cur-item :global(svg) { flex: none; color: var(--indigo-text); }
+  .thumb { position: relative; display: block; width: 64px; height: 64px; flex: none; overflow: hidden; border-radius: 12px; }
+  .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  /* While AMBA works, a beam passes over the picture (transform only). */
+  .thumb.scanning::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 20%, color-mix(in srgb, var(--brand) 60%, transparent) 50%, transparent 80%);
+    animation: beam 1.5s var(--ease-in-out) infinite;
   }
+  @media (prefers-reduced-motion: reduce) {
+    .thumb.scanning::after { animation: none; opacity: 0.35; }
+  }
+  .cur-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+
+  .error-panel { display: grid; gap: var(--space-2); justify-items: start; padding: var(--space-4); background: var(--coral-tint); border-radius: 12px; }
   .error-panel p { margin: 0; }
-  .error-title { font-family: var(--font-display); font-weight: 800; font-size: 1.15em; margin-bottom: var(--space-2) !important; }
-  .hint { color: var(--body-2); font-size: var(--text-sm); margin-top: var(--space-2) !important; }
+  .error-title { display: flex; align-items: center; gap: 6px; color: var(--err); font-weight: 500; }
 
-  .demos {
-    margin-top: var(--space-5);
-    padding-top: var(--space-4);
-    border-top: var(--border-width) dashed var(--border);
-  }
-  .demos-label { margin: 0 0 var(--space-3); font-family: var(--font-display); font-weight: 800; font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.06em; color: var(--indigo-text); }
-  .demos ul { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
-  .demo-btn {
-    min-height: 44px;
-    padding: 10px var(--space-4);
-    background: var(--indigo-tint);
-    color: var(--ink);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-hard-xs);
-    font: inherit;
-    font-size: var(--text-sm);
-    font-weight: 700;
-    cursor: pointer;
-    text-align: left;
-    transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
-  }
-  .demo-btn:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
-  .demo-btn:active { transform: translate(2px, 2px); box-shadow: none; }
-  .demo-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
-  .demos-note { margin: var(--space-3) 0 0; color: var(--muted); font-size: var(--text-sm); }
+  .examples { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); }
+  .ex-label { color: var(--muted); font-size: var(--text-sm); margin-right: 4px; }
+  .examples :global(svg) { color: var(--indigo-text); }
 
-  .console + :global(.radar) { margin-top: var(--space-5); }
+  .sec { display: grid; gap: var(--space-3); }
+  .sec-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+  .sec-head h2 { font-size: var(--text-base); font-weight: 500; }
 
-  /* Phone: the tab row gets the full width so three tabs share one line, and
-   * the clipboard action drops below instead of squeezing them. */
-  @media (max-width: 44rem) {
-    .console-top { flex-direction: column; align-items: stretch; }
-    .console-top :global(.tabs) { display: flex; width: 100%; }
-    /* min-width:0 is required: flex-basis:0 alone still refuses to shrink
-     * below the icon+label intrinsic width, which wrapped the third tab. */
-    .console-top :global(.tabs button) { flex: 1 1 0; min-width: 0; padding: 0 8px; }
-    .console-top :global(.btn) { width: 100%; }
-    .actions { flex-direction: column; }
-    .actions :global(.btn) { width: 100%; justify-content: center; }
+  /* The session list: rules and alignment, no zebra, no header band. */
+  .tbl { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+  .tbl th { padding: 0 12px 8px; color: var(--muted); font-weight: 400; font-size: var(--text-xs); text-align: left; }
+  .tbl td { padding: 0 12px; height: 56px; border-top: 1px solid var(--border-soft); color: var(--body-2); }
+  .tbl .num { text-align: right; }
+  .tbl td.num { color: var(--ink); }
+  .tbl small { color: var(--muted); margin-left: 1px; }
+  .item { max-width: 0; width: 46%; }
+  .item-label { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--ink); }
+  .tag { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--body-2); font-size: var(--text-xs); vertical-align: middle; }
+  .vpill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 500; }
+  .tone-safe { background: var(--safe); color: var(--on-fill); }
+  .tone-warn { background: var(--yellow); color: var(--on-fill); }
+  .tone-danger { background: var(--coral); color: var(--on-fill); }
+  .tone-neutral { background: var(--surface-2); color: var(--ink); }
+  .act { text-align: right; white-space: nowrap; }
+
+  @media (max-width: 40rem) {
+    .panel { padding: var(--space-4); }
+    .item { width: auto; }
+    .tbl td, .tbl th { padding-inline: 6px; }
   }
 </style>

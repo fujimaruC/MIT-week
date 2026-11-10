@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "id": "asli",
+      "image": "/edukasi/quiz-asli.jpg",
+      "ela": "/edukasi/quiz-asli-ela.jpg",
+      "answer": "asli"
+    },
+    {
+      "id": "diedit",
+      "image": "/edukasi/quiz-diedit.jpg",
+      "ela": "/edukasi/quiz-diedit-ela.jpg",
+      "answer": "diedit"
+    },
+    {
+      "id": "tangkapan",
+      "image": "/edukasi/quiz-tangkapan.png",
+      "ela": "/edukasi/quiz-tangkapan-ela.jpg",
+      "answer": "belum-pasti"
+    }
+  ]
+}

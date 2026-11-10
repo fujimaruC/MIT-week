@@ -12,7 +12,7 @@ import (
 
 func TestDemoRouteServesValidDossier(t *testing.T) {
 	rec := httptest.NewRecorder()
-	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/demo/contoh-hoax-bantuan", nil))
+	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/demo/demo-tiktok", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)

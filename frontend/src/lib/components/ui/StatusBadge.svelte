@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import Icon, { type IconName } from './Icon.svelte';
   import type { Status } from '$lib/api/types';
   import { statusLabel } from '$lib/format';
@@ -25,33 +26,37 @@
   <span class="icon" aria-hidden="true"><Icon name={config.icon} size={20} /></span>
   <span class="label">{statusLabel(status)}</span>
   {#if score !== null}
-    <span class="score">Skor risiko {score} dari 100</span>
+    <span class="score">{t('score.of100', { score })}</span>
   {/if}
 </p>
 
 <style>
+  /* Icon on the left, the words wrapping beside it (never under it). */
   .badge {
-    display: inline-flex;
+    display: inline-grid;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
+    column-gap: var(--space-2);
+    row-gap: 2px;
     margin: 0;
     padding: 6px 14px;
     border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-pill);
-    box-shadow: var(--shadow-hard-xs);
+    border-radius: var(--radius-sm);
     color: var(--ink);
     font-family: var(--font-display);
     font-weight: 800;
+    font-stretch: 108%;
     font-size: var(--text-base);
     line-height: 1.25;
   }
   .icon { display: inline-flex; }
+  .badge:has(.score) .icon { grid-row: span 2; }
   .tone--safe { background: var(--safe); }
   .tone--warn { background: var(--yellow); }
   .tone--danger { background: var(--coral); }
-  .tone--neutral { background: var(--indigo-soft); }
+  .tone--neutral { background: var(--surface-2); }
   .score {
+    grid-column: 2;
     font-family: var(--font-sans);
     font-weight: 700;
     font-size: var(--text-sm);

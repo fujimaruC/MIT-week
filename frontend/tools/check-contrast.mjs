@@ -5,7 +5,7 @@
  * Reads the real token file — no duplicated colour values.
  *
  * Both themes are checked. A token may be redefined under
- * `html[data-theme='light']`, so the parser reads each theme's own block and
+ * `html[data-theme='dark']` (:root is the light theme), so the parser reads each theme's own block and
  * falls back to :root for anything it does not override.
  */
 import fs from 'node:fs';
@@ -31,7 +31,7 @@ function blockFor(selector) {
 }
 
 const root = declarations(blockFor(':root'));
-const light = declarations(blockFor("html[data-theme='light']"));
+const dark = declarations(blockFor("html[data-theme='dark']"));
 
 /** Resolves a token for one theme, following var(--other) aliases. */
 function token(name, theme, seen = new Set()) {
@@ -77,7 +77,12 @@ const textPairs = [
    * --on-fill; --ink flips between themes, so text on it is --on-ink. */
   ['on-fill', 'safe'], ['on-fill', 'yellow'], ['on-fill', 'coral'],
   ['on-ink', 'ink'],
-  ['on-brand', 'brand'], ['on-brand', 'indigo'],
+  /* --brand is the light-blue pill (text --on-brand); --indigo is the blue
+   * fill of a finished step (text --on-indigo-text). */
+  ['on-brand', 'brand'], ['on-indigo-text', 'indigo'],
+  ['ink', 'card'], ['body-2', 'card'], ['muted', 'card'], ['indigo-text', 'card'],
+  /* The dashboard frame and its work sheet. */
+  ['ink', 'frame'], ['body-2', 'frame'], ['muted', 'frame'], ['ink', 'sheet'], ['body-2', 'sheet'], ['muted', 'sheet'], ['indigo-text', 'sheet'],
   ['ink', 'paper'], ['ink', 'white'],
   ['ink', 'indigo-soft'], ['ink', 'indigo-tint'], ['on-fill', 'safe'],
   ['ink', 'coral-tint'], ['ink', 'yellow-tint'],
@@ -87,8 +92,8 @@ const textPairs = [
 
 let failures = 0;
 const themes = [
-  ['dark', new Map()],
-  ['light', light]
+  ['light', new Map()],
+  ['dark', dark]
 ];
 
 for (const [name, theme] of themes) {

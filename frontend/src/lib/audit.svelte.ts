@@ -1,8 +1,18 @@
 import { readSSE, type SSEEvent } from './sse';
-import { parseDossier, SchemaVersionError, ContractError, type DossierParsed } from './api/schemas';
+import { SchemaVersionError, ContractError } from './api/errors';
+import type { DossierParsed } from './api/schemas';
 import { API_BASE, isMockMode } from './api/config';
-import { mockAuditStream, type MockKind, type MockPayload } from './api/mock';
+import type { MockKind, MockPayload } from './api/mock';
 import { result } from './result.svelte';
+import { t } from './i18n/index.svelte';
+
+/**
+ * Zod (about 25 KB gz) and the mock stream load on demand: neither is needed
+ * to paint the form, and keeping them out of the first task keeps the page
+ * responsive on a mid-range phone. The import starts with the audit, so the
+ * parser is ready long before the verdict arrives.
+ */
+const loadSchemas = () => import('./api/schemas');
 
 export type PillarKey = 'ela' | 'ai' | 'fact' | 'link';
 export type StageStatus = 'idle' | 'running' | 'done' | 'skipped' | 'failed';
@@ -63,7 +73,7 @@ export class AuditSession {
   }
 
   /** Runs an audit. Retries exactly once on a network error, never on 4xx. */
-  async start(kind: 'url' | 'text' | 'file', payload: { url?: string; text?: string; file?: File }): Promise<void> {
+  async start(kind: 'url' | 'file', payload: { url?: string; file?: File }): Promise<void> {
     this.abort();
     this.#aborted = false;
     this.verdict = null;
@@ -72,9 +82,12 @@ export class AuditSession {
     this.#imageFile = payload.file ?? null;
     this.stages = { ela: 'idle', ai: 'idle', fact: 'idle', link: 'idle' };
     this.partials = {};
+    void loadSchemas().catch(() => {
+      // Retried by the verdict handler; a failure there is a network error.
+    });
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      this.error = { kind: 'offline', message: 'Kamu sedang offline. Contoh kasus masih bisa dibuka.' };
+      this.error = { kind: 'offline', message: t('err.offline') };
       this.running = false;
       return;
     }
@@ -91,7 +104,7 @@ export class AuditSession {
           return;
         }
         if (err instanceof SchemaVersionError) {
-          this.error = { kind: 'schema', message: 'Perbarui aplikasi' };
+          this.error = { kind: 'schema', message: t('err.update') };
           this.running = false;
           return;
         }
@@ -100,7 +113,7 @@ export class AuditSession {
           // Retrying cannot fix that, so say so instead of "try again".
           this.error = {
             kind: 'schema',
-            message: 'Format hasil tidak dikenali. Coba muat ulang halaman ini.'
+            message: t('err.format')
           };
           this.running = false;
           return;
@@ -116,7 +129,7 @@ export class AuditSession {
         }
         this.error = {
           kind: 'network',
-          message: 'Pemeriksaan terhenti sebelum selesai. Coba lagi.'
+          message: t('err.stopped')
         };
         this.running = false;
         return;
@@ -124,14 +137,15 @@ export class AuditSession {
     }
   }
 
-  async #run(kind: 'url' | 'text' | 'file', payload: { url?: string; text?: string; file?: File }): Promise<void> {
+  async #run(kind: 'url' | 'file', payload: { url?: string; file?: File }): Promise<void> {
     this.#controller = new AbortController();
     const { signal } = this.#controller;
 
     // Frontend-only preview: same event contract, no server required.
     if (isMockMode) {
+      const { mockAuditStream } = await import('./api/mock');
       for await (const event of mockAuditStream(kind as MockKind, payload as MockPayload, signal)) {
-        this.#apply(event);
+        await this.#apply(event);
         if (event.type === 'done') return;
       }
       return;
@@ -149,7 +163,7 @@ export class AuditSession {
       init.body = form;
     } else {
       init.headers = { ...init.headers, 'Content-Type': 'application/json' };
-      init.body = JSON.stringify(kind === 'url' ? { url: payload.url } : { text: payload.text });
+      init.body = JSON.stringify({ url: payload.url });
     }
 
     const response = await fetch(`${API_BASE}/audit/${kind}`, init);
@@ -158,19 +172,20 @@ export class AuditSession {
       throw await this.#failure(response);
     }
     if (!response.body) {
-      throw new ApiFailure({ kind: 'network', message: 'Pemeriksaan terhenti sebelum selesai. Coba lagi.' });
+      throw new ApiFailure({ kind: 'network', message: t('err.stopped') });
     }
 
     for await (const event of readSSE(response, signal)) {
-      this.#apply(event);
+      await this.#apply(event);
       if (event.type === 'done') return;
     }
   }
 
   async #failure(response: Response): Promise<ApiFailure> {
-    let message = 'Terjadi kendala di sisi kami. Coba lagi.';
+    let message = t('err.generic');
     try {
       const body = (await response.json()) as { error?: { message?: string } };
+      // Server messages are Indonesian; in English keep the local copy.
       if (body.error?.message) message = body.error.message;
     } catch {
       // Keep the generic message; never surface raw server text.
@@ -180,13 +195,13 @@ export class AuditSession {
       const retry = Number(response.headers.get('Retry-After') ?? '0');
       return new ApiFailure({
         kind: 'rate_limited',
-        message: `Terlalu banyak pemeriksaan. Coba lagi dalam ${retry || 30} detik.`,
+        message: t('err.rate', { n: retry || 30 }),
         retryAfter: retry || 30
       });
     }
     if (response.status === 504) {
       // No verdict exists on a 504; the UI shows retry only.
-      return new ApiFailure({ kind: 'timeout', message: 'Pemeriksaan belum selesai. Coba lagi.' });
+      return new ApiFailure({ kind: 'timeout', message: t('err.timeout') });
     }
     if (response.status === 415 || response.status === 413) {
       return new ApiFailure({ kind: 'unsupported', message });
@@ -194,21 +209,23 @@ export class AuditSession {
     return new ApiFailure({ kind: 'network', message });
   }
 
-  #apply(event: SSEEvent): void {
+  async #apply(event: SSEEvent): Promise<void> {
     switch (event.type) {
       case 'stage':
         this.stages = { ...this.stages, [event.pillar]: event.status };
         this.#announce(event);
         break;
-      case 'verdict':
+      case 'verdict': {
+        const { parseDossier } = await loadSchemas();
         this.verdict = parseDossier(event.data);
         result.set(this.verdict, this.#imageFile);
         if (this.verdict.degraded) {
-          this.announcement = 'Sebagian pemeriksaan tidak berjalan.';
+          this.announcement = t('announce.degraded');
         }
         break;
+      }
       case 'error':
-        this.error = { kind: 'network', message: 'Pemeriksaan terhenti sebelum selesai. Coba lagi.' };
+        this.error = { kind: 'network', message: t('err.stopped') };
         break;
       case 'partial':
         this.partials = { ...this.partials, [event.pillar]: event.data };
@@ -222,18 +239,13 @@ export class AuditSession {
   #announce(event: Extract<SSEEvent, { type: 'stage' }>): void {
     if (this.#announceTimer) clearTimeout(this.#announceTimer);
     this.#announceTimer = setTimeout(() => {
-      const labels: Record<PillarKey, string> = {
-        ela: 'Analisis gambar',
-        ai: 'Deteksi jejak AI',
-        fact: 'Pengecekan fakta',
-        link: 'Pemeriksaan tautan'
-      };
+      const name = t(`pillar.${event.pillar}`);
       if (event.status === 'running') {
-        this.announcement = `Memeriksa ${labels[event.pillar].toLowerCase()}.`;
+        this.announcement = t('announce.running', { name: name.toLowerCase() });
       } else if (event.status === 'done') {
-        this.announcement = `${labels[event.pillar]} selesai.`;
+        this.announcement = t('announce.done', { name });
       } else if (event.status === 'skipped' || event.status === 'failed') {
-        this.announcement = `${labels[event.pillar]} tidak dapat diperiksa.`;
+        this.announcement = t('announce.failed', { name });
       }
     }, 250);
   }

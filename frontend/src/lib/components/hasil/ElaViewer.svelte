@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import SplitSliderViewer from './SplitSliderViewer.svelte';
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
   import type { Anomaly } from '$lib/api/types';
@@ -88,12 +89,11 @@
 
 {#if failed}
   <p class="note">
-    Tampilan panas gambar tidak bisa dibuat di perangkat ini. Skor dan catatan
-    keandalan di atas tetap berasal dari server.
+    {t('ela.failed')}
   </p>
 {:else if !originalUrl || !elaUrl}
   <div class="waiting" aria-live="polite">
-    <p class="note">Menyiapkan tampilan panas gambar…</p>
+    <p class="note">{t('ela.preparing')}</p>
     <Skeleton lines={3} height="2.5rem" />
   </div>
 {:else}
@@ -101,11 +101,11 @@
     src={originalUrl}
     elaSrc={elaUrl}
     {anomalies}
-    alt="Gambar yang diperiksa, dengan pilihan tampilan asli dan tampilan panas"
+    alt={t('ela.alt')}
   />
   {#if downscaled}
     <p class="note">
-      Gambar diperkecil agar bisa diproses. Area kecil bisa tidak terlihat.
+      {t('ela.downscaled')}
     </p>
   {/if}
 {/if}

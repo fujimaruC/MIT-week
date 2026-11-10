@@ -4,10 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#070302" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+    <meta name="theme-color" content="#141413" />
+    <!-- ?v=2: the new logo (10 Nov 2026); Cloudflare keeps the old files 4 hours under the old URLs. -->
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg?v=2" />
     <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon.png?v=2" />
+    <!-- Applies the theme (dark unless the visitor chose light) before the
+         first paint, so a
+         returning visitor never sees the page restyle (and the first render
+         is not followed by a full-document style recalculation). Its CSP
+         hash is computed from this file in vite.config.ts. -->
+    <script>(function(){try{var d=document.documentElement,s=localStorage,t=s.getItem('amba-theme')==='light'?'light':'dark';d.dataset.theme=t;var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',t==='dark'?'#141413':'#faf9f5')}catch(e){}})();</script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

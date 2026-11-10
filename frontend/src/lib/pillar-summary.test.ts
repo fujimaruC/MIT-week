@@ -4,7 +4,7 @@ import { pillarSummary } from './pillar-summary';
 describe('pillarSummary', () => {
   it('says unavailable rather than showing a zero score', () => {
     expect(pillarSummary('ela', { available: false, score: 0 })).toBe(
-      'Tidak dapat diperiksa untuk konten ini.'
+      'Tidak dipakai untuk konten ini.'
     );
   });
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SchemaVersionError, ContractError } from './errors';
 
 /**
  * Zod mirrors of api/dossier.schema.json. A contract change updates the OpenAPI
@@ -7,7 +8,7 @@ import { z } from 'zod';
 
 export const statusSchema = z.enum(['SAFE', 'SUSPICIOUS', 'TAMPERED', 'INSUFFICIENT']);
 export const factStatusSchema = z.enum(['CONTRADICTS', 'SUPPORTS', 'UNVERIFIED']);
-export const inputTypeSchema = z.enum(['URL', 'FILE', 'TEXT']);
+export const inputTypeSchema = z.enum(['URL', 'FILE']);
 
 export const tacticCodeSchema = z.enum([
   'URGENCY',
@@ -23,7 +24,10 @@ export const tacticCodeSchema = z.enum([
 export const anomalySchema = z.object({
   bounding_box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
   extracted_text: z.string().optional(),
-  reason: z.string().optional()
+  reason: z.string().optional(),
+  // Timpa Teks: 0-100, null when it could not be measured; older payloads
+  // omit it.
+  evidence: z.number().int().min(0).max(100).nullish().transform((v) => v ?? null)
 });
 
 export const sourceSchema = z.object({
@@ -37,6 +41,112 @@ export const tacticSchema = z.object({
   code: tacticCodeSchema,
   phrase: z.string(),
   source: z.enum(['text', 'ocr'])
+});
+
+export const metadataStatusSchema = z.enum(['OK', 'BLOCKED', 'UNAVAILABLE']);
+
+/** What the image declares about its origin (Jejak AI). */
+export const provenanceSchema = z.object({
+  kind: z.enum(['AI_GENERATED', 'AI_EDITED', 'CAMERA', 'NONE']),
+  source: z.enum(['c2pa', 'xmp', 'png_text', 'exif', 'watermark', 'creator', 'web', '']),
+  generator: z.string(),
+  camera: z.string(),
+  c2pa: z.boolean()
+});
+
+export const aiDetectorSchema = z.object({
+  name: z.string(),
+  score: z.number().int().min(0).max(100)
+});
+
+/** Public description of a submitted link (PRD F1). null for FILE. */
+export const sourceMetadataSchema = z.object({
+  status: metadataStatusSchema,
+  platform: z.string(),
+  via: z.string(),
+  title: z.string(),
+  author: z.string(),
+  description: z.string(),
+  site_name: z.string()
+});
+
+const videoSignalSchema = z.object({
+  score: z.number().int().min(0).max(100),
+  indicators: z.array(z.string()).nullish().transform((v) => v ?? [])
+});
+
+/** What the creator says about AI in the post (older servers omit it). */
+const creatorDisclosureSchema = z
+  .object({ level: z.enum(['none', 'weak', 'strong']), phrase: z.string() })
+  .nullish();
+
+/** A reputable page about the video; only https links may become an href. */
+const webEvidenceSchema = z.object({
+  title: z.string(),
+  url: z.string().startsWith('https://'),
+  publisher: z.string(),
+  says: z.enum(['AI', 'REAL', 'HOAX'])
+});
+
+/** What the video shows, as 5W1H (Sir, 10 Nov 2026). Each field may be ''. */
+const w5h1Schema = z.object({
+  what: z.string().catch(''),
+  who: z.string().catch(''),
+  when: z.string().catch(''),
+  where: z.string().catch(''),
+  why: z.string().catch(''),
+  how: z.string().catch('')
+});
+
+/** One trusted-source search result behind the conclusion. A bad field never
+ * fails the whole result: it falls back to '' and the UI drops what it can't
+ * show (only http(s) links become an href). */
+const researchSourceSchema = z.object({
+  title: z.string().catch(''),
+  url: z.string().catch(''),
+  domain: z.string().catch(''),
+  snippet: z.string().catch(''),
+  published: z.string().catch('')
+});
+
+/** The web search on trusted domains for what the video shows. */
+const researchSchema = z.object({
+  query: z.string().catch(''),
+  status: z.enum(['FOUND', 'NONE', 'UNAVAILABLE']).catch('NONE'),
+  sources: z.array(researchSourceSchema).nullish().catch([]).transform((v) => v ?? [])
+});
+
+export type VideoW5H1 = z.infer<typeof w5h1Schema>;
+export type VideoResearch = z.infer<typeof researchSchema>;
+
+/** Frame-by-frame analysis of a social video link. Absent for other input. */
+export const videoSchema = z.object({
+  status: z.enum(['OK', 'UNAVAILABLE']),
+  reason: z.string(),
+  platform: z.string(),
+  duration_sec: z.number().min(0),
+  upload_date: z.string(),
+  platform_ai_label: z.boolean(),
+  frames: z
+    .array(
+      z.object({
+        at_sec: z.number().min(0),
+        // Only our own JPEG thumbnails may become an <img src>.
+        thumb: z.string().startsWith('data:image/jpeg;base64,')
+      })
+    )
+    .nullish()
+    .transform((v) => v ?? []),
+  audio_analyzed: z.boolean(),
+  summary: z.string(),
+  transcript: z.string(),
+  manipulation: videoSignalSchema,
+  context: videoSignalSchema,
+  creator_disclosure: creatorDisclosureSchema,
+  web_evidence: z.array(webEvidenceSchema).nullish(),
+  // Older servers omit both.
+  w5h1: w5h1Schema.nullish().catch(null).transform((v) => v ?? null),
+  research: researchSchema.nullish().catch(null).transform((v) => v ?? null)
 });
 
 export const verdictSchema = z.object({
@@ -72,8 +182,13 @@ export const dossierSchema = z.object({
     ai: z.object({
       available: z.boolean(),
       score: z.number(),
+      // Added in the same schema_version for the AI-image check: payloads
+      // and share links made before it omit these fields.
+      reliability: z.number().min(0).max(1).optional(),
       indicators: z.array(z.string()).nullish().transform((v) => v ?? []),
-      caveat: z.string().optional()
+      caveat: z.string().optional(),
+      provenance: provenanceSchema.nullish().transform((v) => v ?? null),
+      detector: aiDetectorSchema.nullish().transform((v) => v ?? null)
     }),
     fact: z.object({
       available: z.boolean(),
@@ -97,7 +212,13 @@ export const dossierSchema = z.object({
     })
   }),
   tactics: z.array(tacticSchema),
-  share_token: z.string()
+  share_token: z.string(),
+  // Added in the same schema_version: older payloads (and bundled demos built
+  // before the field existed) simply omit them.
+  source_metadata: sourceMetadataSchema.nullish().transform((v) => v ?? null),
+  ocr_text: z.string().max(2000).nullish().transform((v) => v ?? ''),
+  // Social video links only; older payloads and other input omit it.
+  video: videoSchema.nullish().transform((v) => v ?? null)
 });
 
 export const errorEnvelopeSchema = z.object({
@@ -110,27 +231,7 @@ export const errorEnvelopeSchema = z.object({
 
 export type DossierParsed = z.infer<typeof dossierSchema>;
 
-/** Raised when the server speaks a newer contract than this build understands. */
-export class SchemaVersionError extends Error {
-  constructor() {
-    super('Perbarui aplikasi');
-    this.name = 'SchemaVersionError';
-  }
-}
-
-/**
- * Raised when a payload does not match the contract at all. Kept separate from
- * a network failure so the UI can say "this is our problem" instead of
- * "try again" for something retrying will never fix.
- */
-export class ContractError extends Error {
-  readonly issues: string[];
-  constructor(issues: string[]) {
-    super('Payload does not match the Dossier contract');
-    this.name = 'ContractError';
-    this.issues = issues;
-  }
-}
+export { SchemaVersionError, ContractError };
 
 /**
  * Parses an unknown payload into a Dossier. A schema_version this build does

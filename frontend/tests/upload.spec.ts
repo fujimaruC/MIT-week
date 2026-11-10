@@ -11,7 +11,7 @@ test('a screenshot upload reaches the ELA comparison slider', async ({ page }) =
   await page.getByRole('tab', { name: 'Gambar' }).click();
   await page.setInputFiles('#amba-file', fileURLToPath(new URL('./fixtures/sample.png', import.meta.url)));
 
-  await page.getByRole('button', { name: 'Mulai periksa' }).click();
+  await page.getByRole('button', { name: 'Periksa', exact: true }).click();
 
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 25_000 });
   await expect(page.getByRole('heading', { name: 'Tampilan gambar' })).toBeVisible();

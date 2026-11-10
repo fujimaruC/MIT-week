@@ -110,6 +110,11 @@ func originalPhrase(source, normalizedPhrase string) string {
 	phraseRunes := len([]rune(normalizedPhrase))
 
 	for start := 0; start < len(runes); start++ {
+		// A leading space normalises away, so starting on one would return
+		// the phrase with a stray space in front of it.
+		if unicode.IsSpace(runes[start]) {
+			continue
+		}
 		for end := start + 1; end <= len(runes); end++ {
 			candidate := Normalize(string(runes[start:end]))
 			if candidate == normalizedPhrase {

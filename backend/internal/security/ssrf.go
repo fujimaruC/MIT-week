@@ -130,6 +130,18 @@ func ValidateFetchURL(raw string) (*url.URL, error) {
 	if u.User != nil {
 		return nil, ErrBlockedTarget
 	}
+	// Refuse obviously internal targets up front (PRD F1 AC), so the user gets
+	// the generic "cannot be checked" message instead of a result for a URL
+	// AMBA was never going to fetch. The dialer still re-checks every
+	// connection, which also covers names that resolve to private addresses.
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if ip := net.ParseIP(host); ip != nil && IsBlocked(ip) {
+		return nil, ErrBlockedTarget
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") ||
+		strings.HasSuffix(host, ".internal") || strings.HasSuffix(host, ".home.arpa") {
+		return nil, ErrBlockedTarget
+	}
 	return u, nil
 }
 

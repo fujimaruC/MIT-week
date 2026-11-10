@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Anomaly } from '$lib/api/types';
 
   interface Props {
@@ -8,7 +9,7 @@
     alt?: string;
   }
 
-  let { src, elaSrc = null, anomalies = [], alt = 'Gambar yang diperiksa' }: Props = $props();
+  let { src, elaSrc = null, anomalies = [], alt = '' }: Props = $props();
 
   let position = $state(50);
   let view = $state<'slider' | 'original' | 'ela'>('slider');
@@ -32,6 +33,9 @@
     }
   }
 
+  // scoring.ELAEvidenceMin: from here the text check counts as evidence.
+  const TEXT_EVIDENCE_MIN = 50;
+
   // Boxes are normalized 0-1000 as [ymin, xmin, ymax, xmax] against the image's
   // own dimensions, so percentages hold at any aspect ratio.
   const boxes = $derived(
@@ -43,29 +47,30 @@
         width: (xmax - xmin) / 10,
         height: (ymax - ymin) / 10,
         reason: a.reason ?? '',
-        text: a.extracted_text ?? ''
+        text: a.extracted_text ?? '',
+        evidence: a.evidence ?? null
       };
     })
   );
 </script>
 
 <div class="viewer">
-  <div class="tabs" role="tablist" aria-label="Cara melihat gambar">
+  <div class="tabs" role="tablist" aria-label={t('slider.tabs')}>
     {#if hasEla}
-      <button type="button" role="tab" aria-selected={view === 'slider'} onclick={() => (view = 'slider')}>Geser</button>
+      <button type="button" role="tab" aria-selected={view === 'slider'} onclick={() => (view = 'slider')}>{t('slider.slide')}</button>
     {/if}
-    <button type="button" role="tab" aria-selected={view === 'original'} onclick={() => (view = 'original')}>Asli</button>
+    <button type="button" role="tab" aria-selected={view === 'original'} onclick={() => (view = 'original')}>{t('slider.original')}</button>
     {#if hasEla}
       <button type="button" role="tab" aria-selected={view === 'ela'} onclick={() => (view = 'ela')}>ELA</button>
     {/if}
   </div>
 
   <div class="stage">
-    <img {src} {alt} class="base" />
+    <img {src} alt={alt || t('slider.alt')} class="base" />
 
     {#if hasEla && view !== 'original'}
       <div class="overlay" style:clip-path={view === 'slider' ? `inset(0 0 0 ${position}%)` : 'none'}>
-        <img src={elaSrc} alt="Peta perbedaan kompresi (ELA)" class="base fill" />
+        <img src={elaSrc} alt={t('slider.elaAlt')} class="base fill" />
       </div>
     {/if}
 
@@ -94,8 +99,8 @@
       max="100"
       step="1"
       bind:value={position}
-      aria-label="Geser untuk membandingkan gambar asli dan hasil ELA"
-      aria-valuetext="{position}% gambar asli"
+      aria-label={t('slider.aria')}
+      aria-valuetext={t('slider.valuetext', { n: position })}
       onkeydown={onRangeKey}
     />
   {/if}
@@ -107,9 +112,14 @@
       <li>
         <span class="anomaly-num" aria-hidden="true">{i + 1}</span>
         <span>
-          <strong>Area {i + 1}</strong>
+          <strong>{t('slider.area', { n: i + 1 })}</strong>
           {#if box.text}<span class="quote">“{box.text}”</span>{/if}
           {#if box.reason}<span class="reason">{box.reason}</span>{/if}
+          {#if box.evidence !== null}
+            <span class="evidence" class:strong={box.evidence >= TEXT_EVIDENCE_MIN}>
+              {t(box.evidence >= TEXT_EVIDENCE_MIN ? 'slider.evidenceHigh' : 'slider.evidenceLow')}
+            </span>
+          {/if}
         </span>
       </li>
     {/each}
@@ -204,4 +214,6 @@
   }
   .quote { display: block; color: var(--body-2); }
   .reason { display: block; color: var(--muted); font-size: var(--text-sm); }
+  .evidence { display: block; color: var(--muted); font-size: var(--text-sm); }
+  .evidence.strong { color: var(--ink); font-weight: 700; }
 </style>

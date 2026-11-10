@@ -26,8 +26,7 @@
       "type": "string",
       "enum": [
         "URL",
-        "FILE",
-        "TEXT"
+        "FILE"
       ]
     },
     "Anomaly": {
@@ -49,6 +48,15 @@
         },
         "reason": {
           "type": "string"
+        },
+        "evidence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Timpa Teks: how differently the text in the box reacts to JPEG re-compression compared with the image's other text (0-100); null when it could not be measured."
         }
       },
       "required": [
@@ -137,7 +145,7 @@
           ],
           "minimum": 0,
           "maximum": 100,
-          "description": "RISK score, not confidence. Null when INSUFFICIENT."
+          "description": "RISK score, not confidence. Always present on new results (null only in old INSUFFICIENT payloads)."
         },
         "status": {
           "$ref": "#/$defs/Status"
@@ -185,9 +193,15 @@
             "enum": [
               "FACT_CONTRADICTED",
               "LINK_MALICIOUS",
+              "LINK_STRONG",
               "ELA_CORROBORATED",
               "ELA_SOLO_CAP",
-              "INJECTION_GUARD"
+              "INJECTION_GUARD",
+              "AI_PROVENANCE",
+              "AI_EDITED",
+              "AI_LIKELY",
+              "VIDEO_CONTEXT_MISMATCH",
+              "VIDEO_MANIPULATED"
             ]
           }
         }
@@ -244,7 +258,14 @@
               "type": "boolean"
             },
             "score": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "reliability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
             },
             "indicators": {
               "type": "array",
@@ -254,12 +275,26 @@
             },
             "caveat": {
               "type": "string"
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "detector": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/AIDetector"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
             "available",
             "score"
-          ]
+          ],
+          "description": "Jejak AI: whether the image (the upload, or a link's preview image) was made with AI. score is a likelihood computed in Go from the image's provenance, an optional detector and the model's visible clues."
         },
         "fact": {
           "type": "object",
@@ -317,6 +352,68 @@
         }
       }
     },
+    "Provenance": {
+      "type": "object",
+      "description": "What the image declares about its origin: Content Credentials (c2pa), IPTC/XMP metadata (xmp), generator settings in PNG text (png_text), EXIF (exif), or an AI label visible on the image (watermark). Missing metadata proves nothing; camera data is a hint, not proof.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "AI_GENERATED",
+            "AI_EDITED",
+            "CAMERA",
+            "NONE"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "c2pa",
+            "xmp",
+            "png_text",
+            "exif",
+            "watermark",
+            "creator",
+            "web",
+            ""
+          ]
+        },
+        "generator": {
+          "type": "string"
+        },
+        "camera": {
+          "type": "string"
+        },
+        "c2pa": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "generator",
+        "camera",
+        "c2pa"
+      ]
+    },
+    "AIDetector": {
+      "type": "object",
+      "description": "A dedicated AI-image detector's answer, present only when one is configured and answered.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "name",
+        "score"
+      ]
+    },
     "Dossier": {
       "type": "object",
       "properties": {
@@ -362,6 +459,33 @@
         },
         "share_token": {
           "type": "string"
+        },
+        "source_metadata": {
+          "description": "Public description of the submitted link (PRD F1). null for FILE input.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/SourceMetadata"
+            }
+          ]
+        },
+        "ocr_text": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Text the model read in an uploaded image (FILE only, empty otherwise)."
+        },
+        "video": {
+          "description": "Frame-by-frame analysis of a social video link (TikTok, YouTube, X, Instagram, Facebook). Absent for other input.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/VideoAnalysis"
+            }
+          ]
         }
       },
       "required": [
@@ -376,6 +500,156 @@
         "pillars",
         "tactics",
         "share_token"
+      ]
+    },
+    "VideoAnalysis": {
+      "type": "object",
+      "description": "A social video downloaded from the submitted link and analysed frame by frame, and by its soundtrack when the model takes audio. The AI score lives in pillars.ai.",
+      "properties": {
+        "status": { "type": "string", "enum": ["OK", "UNAVAILABLE"] },
+        "reason": { "type": "string", "enum": ["", "unsupported", "private", "too_long", "too_big", "timeout", "download_failed", "no_tools", "model_failed"] },
+        "platform": { "type": "string", "enum": ["youtube", "tiktok", "x", "instagram", "facebook"] },
+        "duration_sec": { "type": "number", "minimum": 0 },
+        "upload_date": { "type": "string", "description": "YYYY-MM-DD, or empty when unknown." },
+        "platform_ai_label": { "type": "boolean" },
+        "frames": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/VideoFrame" } },
+        "audio_analyzed": { "type": "boolean" },
+        "summary": { "type": "string", "maxLength": 300 },
+        "transcript": { "type": "string", "maxLength": 800 },
+        "manipulation": { "$ref": "#/$defs/VideoSignal" },
+        "context": { "$ref": "#/$defs/VideoSignal" },
+        "creator_disclosure": { "$ref": "#/$defs/CreatorDisclosure" },
+        "web_evidence": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/WebEvidence" } },
+        "w5h1": { "$ref": "#/$defs/W5H1" },
+        "research": { "$ref": "#/$defs/Research" }
+      },
+      "required": ["status", "reason", "platform", "duration_sec", "upload_date", "platform_ai_label", "frames", "audio_analyzed", "summary", "transcript", "manipulation", "context"]
+    },
+    "W5H1": {
+      "type": "object",
+      "description": "What the video shows, one short answer per question; empty where the video does not show it. Absent when the model gave none.",
+      "properties": {
+        "what": { "type": "string", "maxLength": 160 },
+        "who": { "type": "string", "maxLength": 160 },
+        "when": { "type": "string", "maxLength": 160 },
+        "where": { "type": "string", "maxLength": 160 },
+        "why": { "type": "string", "maxLength": 160 },
+        "how": { "type": "string", "maxLength": 160 }
+      },
+      "required": ["what", "who", "when", "where", "why", "how"]
+    },
+    "Research": {
+      "type": "object",
+      "description": "One web search on trusted newsrooms and fact-checkers for what the video shows: the trail behind the verdict. No model judges these pages. Absent when no search ran.",
+      "properties": {
+        "query": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["FOUND", "NONE", "UNAVAILABLE"] },
+        "sources": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/ResearchSource" } }
+      },
+      "required": ["query", "status", "sources"]
+    },
+    "ResearchSource": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "url": { "type": "string", "pattern": "^https://" },
+        "domain": { "type": "string", "maxLength": 80 },
+        "snippet": { "type": "string", "maxLength": 280 },
+        "published": { "type": "string", "description": "Empty when the search did not say." }
+      },
+      "required": ["title", "url", "domain", "snippet", "published"]
+    },
+    "CreatorDisclosure": {
+      "type": "object",
+      "description": "What the creator says about AI in the post. strong: names AI or a generator as the maker. weak: only mentions AI. none: nothing, or news about AI.",
+      "properties": {
+        "level": { "type": "string", "enum": ["none", "weak", "strong"] },
+        "phrase": { "type": "string", "maxLength": 60 }
+      },
+      "required": ["level", "phrase"]
+    },
+    "WebEvidence": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "url": { "type": "string", "pattern": "^https://" },
+        "publisher": { "type": "string", "maxLength": 80 },
+        "says": { "type": "string", "enum": ["AI", "REAL", "HOAX"] }
+      },
+      "required": ["title", "url", "publisher", "says"]
+    },
+    "VideoFrame": {
+      "type": "object",
+      "properties": {
+        "at_sec": { "type": "number", "minimum": 0 },
+        "thumb": { "type": "string", "pattern": "^data:image/jpeg;base64,", "description": "JPEG thumbnail, longest side <= 240 px." }
+      },
+      "required": ["at_sec", "thumb"]
+    },
+    "VideoSignal": {
+      "type": "object",
+      "properties": {
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "indicators": { "type": "array", "maxItems": 5, "items": { "type": "string", "maxLength": 160 } }
+      },
+      "required": ["score", "indicators"]
+    },
+    "SourceMetadata": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "BLOCKED",
+            "UNAVAILABLE"
+          ]
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "youtube",
+            "tiktok",
+            "x",
+            "instagram",
+            "facebook",
+            "threads",
+            "web"
+          ]
+        },
+        "via": {
+          "type": "string",
+          "enum": [
+            "oembed",
+            "opengraph",
+            ""
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "site_name": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "status",
+        "platform",
+        "via",
+        "title",
+        "author",
+        "description",
+        "site_name"
       ]
     },
     "ErrorEnvelope": {

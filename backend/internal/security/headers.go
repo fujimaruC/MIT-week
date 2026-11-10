@@ -39,6 +39,17 @@ func NewCORSConfig(publicAppURL string, development bool) CORSConfig {
 	return CORSConfig{AllowedOrigins: origins}
 }
 
+// WithOrigins returns a copy that also allows the given exact origins.
+func (c CORSConfig) WithOrigins(extra ...string) CORSConfig {
+	out := CORSConfig{AllowedOrigins: append([]string{}, c.AllowedOrigins...)}
+	for _, o := range extra {
+		if o = strings.TrimRight(strings.TrimSpace(o), "/"); o != "" && !strings.HasSuffix(o, ":*") {
+			out.AllowedOrigins = append(out.AllowedOrigins, o)
+		}
+	}
+	return out
+}
+
 func (c CORSConfig) allowed(origin string) bool {
 	origin = strings.TrimRight(origin, "/")
 	for _, o := range c.AllowedOrigins {
@@ -98,6 +109,14 @@ func (c CORSConfig) Middleware(next http.Handler) http.Handler {
 func ParseTrustedProxies(cidrs []string) []*net.IPNet {
 	out := make([]*net.IPNet, 0, len(cidrs))
 	for _, c := range cidrs {
+		if strings.TrimSpace(c) == "*" {
+			// Only for hosts that are reachable exclusively through their
+			// proxy (Fly.io, Railway): every peer is that proxy.
+			_, v4, _ := net.ParseCIDR("0.0.0.0/0")
+			_, v6, _ := net.ParseCIDR("::/0")
+			out = append(out, v4, v6)
+			continue
+		}
 		if _, n, err := net.ParseCIDR(strings.TrimSpace(c)); err == nil {
 			out = append(out, n)
 		}

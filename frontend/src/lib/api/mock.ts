@@ -9,14 +9,13 @@
  * the AuditSession already speaks the same SSE event shape.
  */
 import { parseDossier, type DossierParsed } from './schemas';
-import type { FactStatus, Status, Tactic, TacticCode } from './types';
+import type { FactStatus, Status, Tactic } from './types';
 import type { SSEEvent } from '../sse';
 
-export type MockKind = 'url' | 'text' | 'file';
+export type MockKind = 'url' | 'file';
 
 export interface MockPayload {
   url?: string;
-  text?: string;
   file?: File;
 }
 
@@ -86,37 +85,6 @@ function makeToken(dossier: Omit<DossierParsed, 'share_token'>): string {
 
 /* ------------------------------------------------------------- heuristics */
 
-const TACTIC_PATTERNS: Array<{ code: TacticCode; pattern: RegExp }> = [
-  { code: 'URGENCY', pattern: /(hari ini saja|sekarang|segera|jangan sampai ketinggalan|batas waktu)/i },
-  { code: 'REWARD_BAIT', pattern: /(bantuan|hadiah|menang|gratis|Rp\s?[\d.]+)/i },
-  { code: 'FEAR', pattern: /(diblokir|denda|ditangkap|akun anda|akan dihapus)/i },
-  { code: 'SECRECY', pattern: /(jangan bilang|rahasia|jangan beri tahu)/i },
-  { code: 'IMPERSONATION', pattern: /(admin|petugas|pemerintah|bank resmi)/i },
-  { code: 'OUTRAGE_BAIT', pattern: /(memalukan|skandal|heboh|viral)/i },
-  { code: 'FAKE_SOCIAL_PROOF', pattern: /(sudah banyak|semua orang|sebarkan ke|10 grup)/i }
-];
-
-const TACTIC_INDICATORS: Record<TacticCode, string> = {
-  URGENCY: 'Tekanan waktu',
-  REWARD_BAIT: 'Iming-iming hadiah',
-  FALSE_AUTHORITY: 'Mengaku pihak berwenang',
-  FEAR: 'Ancaman atau rasa takut',
-  SECRECY: 'Meminta dirahasiakan',
-  OUTRAGE_BAIT: 'Membangkitkan kemarahan',
-  IMPERSONATION: 'Meniru pihak lain',
-  FAKE_SOCIAL_PROOF: 'Ajakan menyebarkan'
-};
-
-function detectTactics(text: string): Tactic[] {
-  const found: Tactic[] = [];
-  for (const { code, pattern } of TACTIC_PATTERNS) {
-    const match = text.match(pattern);
-    if (match?.[0]) found.push({ code, phrase: match[0], source: 'text' });
-    if (found.length >= 5) break;
-  }
-  return found;
-}
-
 const SHORTENERS = ['bit.ly', 'tinyurl.com', 't.co', 'is.gd', 'cutt.ly', 'shorturl.at', 's.id'];
 const LOOKALIKE_BRANDS = [
   'whatsapp',
@@ -154,7 +122,7 @@ function analyzeUrl(raw: string): LinkSignals {
     finalUrl = parsed.href;
     pathAndQuery = `${parsed.pathname}${parsed.search}`;
   } catch {
-    reasons.push({ code: 'MALFORMED', text: 'Alamat tautan tidak dapat dibaca dengan benar.' });
+    reasons.push({ code: 'MALFORMED', text: 'Alamat tautan disusun tidak wajar.' });
   }
 
   if (host.startsWith('xn--') || host.includes('.xn--')) {
@@ -186,16 +154,6 @@ function analyzeUrl(raw: string): LinkSignals {
   };
 }
 
-const SCAM_MARKERS =
-  /(otp|pin|kata sandi|password|transfer|rekening|hadiah|menang|bantuan|diblokir|verifikasi|klik|sebarkan|grup|hari ini|segera)/i;
-const BENIGN_MARKERS = /(jadwal|posyandu|undangan|rapat|pengumuman|kerja bakti|gotong royong)/i;
-
-function firstSentence(text: string): string {
-  const trimmed = text.trim().replace(/\s+/g, ' ');
-  const end = trimmed.search(/[.!?]/);
-  return (end === -1 ? trimmed : trimmed.slice(0, end + 1)).slice(0, 200);
-}
-
 function basisFor(available: { ai: boolean; fact: boolean; link: boolean; ela: boolean }) {
   const basis: Array<'ela' | 'ai' | 'fact' | 'link'> = [];
   if (available.ela) basis.push('ela');
@@ -213,7 +171,7 @@ function notCheckedFor(available: { ai: boolean; fact: boolean; link: boolean; e
 function simpleSentence(status: Status, fact: FactStatus): string {
   if (fact === 'CONTRADICTS') return 'Kabar ini dibantah sumber terpercaya. Jangan disebarkan.';
   if (status === 'TAMPERED') return 'Pesan ini memakai pola yang sering muncul pada penipuan. Jangan langsung percaya.';
-  if (status === 'SUSPICIOUS') return 'Belum jelas benar atau tidak. Cek dulu sebelum menyebarkan.';
+  if (status === 'SUSPICIOUS') return 'Ada tanda yang perlu diwaspadai. Cek dulu sebelum menyebarkan.';
   if (status === 'SAFE') return 'Tidak ditemukan tanda bahaya, tapi tetap bijak sebelum menyebarkan.';
   return 'Informasinya belum cukup untuk dipastikan.';
 }
@@ -238,7 +196,7 @@ function explanationFor(status: Status, fact: FactStatus, tactics: Tactic[], lin
 }
 
 function baseDossier(
-  inputType: 'URL' | 'TEXT' | 'FILE',
+  inputType: 'URL' | 'FILE',
   sourceReference: string,
   overrides: {
     status: Status;
@@ -251,6 +209,8 @@ function baseDossier(
     floors: string[];
     pillars: DossierParsed['pillars'];
     tactics: Tactic[];
+    sourceMetadata?: DossierParsed['source_metadata'];
+    video?: DossierParsed['video'];
   }
 ): DossierParsed {
   const withoutToken: Omit<DossierParsed, 'share_token'> = {
@@ -272,7 +232,10 @@ function baseDossier(
       floors_applied: overrides.floors
     },
     pillars: overrides.pillars,
-    tactics: overrides.tactics
+    tactics: overrides.tactics,
+    source_metadata: overrides.sourceMetadata ?? null,
+    ocr_text: '',
+    video: overrides.video ?? null
   };
 
   return parseDossier({ ...withoutToken, share_token: makeToken(withoutToken) });
@@ -280,6 +243,20 @@ function baseDossier(
 
 function unavailablePillar() {
   return { available: false, score: 0, reliability: 0, reliability_note: null, anomalies: [] };
+}
+
+const NO_PROVENANCE = { kind: 'NONE' as const, source: '' as const, generator: '', camera: '', c2pa: false };
+
+function unavailableAI() {
+  return {
+    available: false,
+    score: 0,
+    reliability: 0,
+    indicators: [],
+    caveat: 'Indikatif, bukan bukti pasti',
+    provenance: NO_PROVENANCE,
+    detector: null
+  };
 }
 
 function unavailableFact() {
@@ -296,100 +273,197 @@ function unavailableLink() {
   };
 }
 
-/* ------------------------------------------------------------- builders */
+/* ---------------------------------------------------------------- video */
 
-function textDossier(payload: MockPayload): DossierParsed {
-  const text = (payload.text ?? '').trim();
-  const tactics = detectTactics(text);
-  const linkMatch = text.match(/https?:\/\/[^\s]+/i);
-  const link = linkMatch ? analyzeUrl(linkMatch[0]) : null;
-  const strong = SCAM_MARKERS.test(text);
-  // A benign announcement that carries a suspicious link is not benign.
-  const benign = BENIGN_MARKERS.test(text) && !strong && (!link || link.score < 21);
+type VideoPlatform = 'tiktok' | 'youtube' | 'x';
 
-  let status: Status;
-  let score: number | null;
-  let fact: FactStatus = 'UNVERIFIED';
-
-  if (strong) {
-    status = 'TAMPERED';
-    score = Math.min(90, 62 + tactics.length * 6 + (link ? 8 : 0));
-    fact = 'CONTRADICTS';
-  } else if (benign) {
-    status = 'SAFE';
-    score = 8;
-    fact = 'SUPPORTS';
-  } else if (tactics.length > 0 || link) {
-    status = 'SUSPICIOUS';
-    score = Math.min(60, 28 + tactics.length * 8 + (link ? 8 : 0));
-  } else {
-    status = 'INSUFFICIENT';
-    score = null;
+/** A TikTok, YouTube or X video link; any other link stays a plain link check. */
+export function videoPlatform(raw: string): VideoPlatform | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
   }
+  const host = url.hostname.toLowerCase().replace(/^(www|m|mobile)\./, '');
+  const path = url.pathname;
+  if (host === 'tiktok.com') return /^\/@[^/]+\/video\/\d+/.test(path) ? 'tiktok' : null;
+  if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return path.length > 1 ? 'tiktok' : null;
+  if (host === 'youtube.com') {
+    return (path === '/watch' && url.searchParams.has('v')) || path.startsWith('/shorts/') ? 'youtube' : null;
+  }
+  if (host === 'youtu.be') return path.length > 1 ? 'youtube' : null;
+  if (host === 'x.com' || host === 'twitter.com') return /^\/\w+\/status\/\d+/.test(path) ? 'x' : null;
+  return null;
+}
 
-  const factAvailable = status === 'TAMPERED' || status === 'SAFE';
-  const aiScore = status === 'TAMPERED' ? 78 : status === 'SUSPICIOUS' ? 46 : status === 'SAFE' ? 8 : 22;
-  const indicators = tactics.map((tactic) => TACTIC_INDICATORS[tactic.code]);
-  if (link) indicators.push('Tautan menyembunyikan tujuan');
+const JPEG_PREFIX = 'data:image/jpeg;base64,';
+/** A 16x9 muddy-brown JPEG for a runtime without a 2D canvas (tests, locked-down browsers). */
+const FALLBACK_FRAME = `${JPEG_PREFIX}/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAAJABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwT/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCMBMZ//9k=`;
 
-  const available = { ela: false, ai: true, fact: factAvailable, link: !!link };
-  const floors: string[] = [];
-  if (fact === 'CONTRADICTS') floors.push('FACT_CONTRADICTED');
-  if (link && link.score >= 85) floors.push('LINK_MALICIOUS');
+/**
+ * One example keyframe, drawn at runtime so no image ships with the app: a
+ * street under a grey sky, an on-screen caption, and flood water that rises
+ * with `rise` (0 to 1) from frame to frame.
+ */
+function drawFrame(width: number, height: number, rise: number): string {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return FALLBACK_FRAME;
+    ctx.fillStyle = '#9fb0bf';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#4f5965';
+    for (let i = 0; i < 5; i++) {
+      const top = height * (0.32 + 0.08 * ((i * 3) % 4));
+      ctx.fillRect((width / 5) * i + 2, top, width / 5 - 4, height - top);
+    }
+    const water = height * (0.82 - 0.36 * rise);
+    ctx.fillStyle = '#7a6544';
+    ctx.fillRect(0, water, width, height - water);
+    const size = Math.round(Math.min(width, height) * 0.08);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(width * 0.08, height * 0.07, width * 0.84, size * 1.8);
+    ctx.fillStyle = '#111111';
+    ctx.font = `bold ${size}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('JAKARTA PAGI INI', width / 2, height * 0.07 + size * 0.9, width * 0.8);
+    const url = canvas.toDataURL('image/jpeg', 0.7);
+    return url.startsWith(JPEG_PREFIX) ? url : FALLBACK_FRAME;
+  } catch {
+    return FALLBACK_FRAME;
+  }
+}
 
-  return baseDossier('TEXT', text, {
-    status,
-    score,
-    shortTitle: status === 'SAFE' ? 'Pesan tanpa tanda bahaya' : status === 'INSUFFICIENT' ? 'Pesan belum bisa dinilai' : 'Pesan memakai pola penipuan',
-    explanation: explanationFor(status, fact, tactics, link),
-    explanationSimple: simpleSentence(status, fact),
+const VIDEO_FRAME_TIMES = [0, 8, 16, 24, 32, 40];
+
+/**
+ * A social video link: an example flood clip whose frames look AI-made and
+ * whose footage only partly matches its caption, so the result page shows
+ * every part of the video card (AI label, frames, transcript, three levels).
+ */
+function videoDossier(url: string, platform: VideoPlatform): DossierParsed {
+  const link = analyzeUrl(url);
+  // TikTok and Shorts are portrait; the server's thumbnails keep the long side at 240 px.
+  const [width, height] = platform === 'tiktok' || url.includes('/shorts/') ? [135, 240] : [240, 135];
+  const available = { ela: false, ai: true, fact: false, link: true };
+  const last = VIDEO_FRAME_TIMES.length - 1;
+
+  return baseDossier('URL', url, {
+    status: 'SUSPICIOUS',
+    score: 52,
+    shortTitle: 'Video tampak buatan AI',
+    explanation:
+      'Beberapa frame memperlihatkan ciri video buatan AI, seperti tulisan berupa huruf acak dan benda yang berubah bentuk. Sebagian isi rekaman juga tidak cocok dengan keterangannya. Ini data contoh dari mode pratinjau.',
+    explanationSimple: 'Video ini tampak buatan AI. Cek dulu sebelum menyebarkan.',
     basis: basisFor(available),
     notChecked: notCheckedFor(available),
-    floors,
+    floors: ['AI_LIKELY'],
+    sourceMetadata: {
+      status: 'OK',
+      platform,
+      via: 'oembed',
+      title: 'Detik-detik banjir bandang menerjang Jakarta pagi ini!! Sebarkan ke keluarga',
+      author: 'contoh.simulasi',
+      description: '',
+      site_name: ''
+    },
     pillars: {
       ela: unavailablePillar(),
       ai: {
         available: true,
-        score: aiScore,
-        indicators,
-        caveat: 'Indikatif, bukan bukti pasti. Mode pratinjau memakai aturan kata kunci.'
+        score: 82,
+        reliability: 0.6,
+        indicators: [
+          'Frame 2: tulisan di papan toko berupa huruf acak',
+          'Frame 4: mobil berubah bentuk saat terseret arus',
+          'Frame 6: gerak air terlalu mulus dan berulang'
+        ],
+        caveat: 'Indikatif, bukan bukti pasti. Mode pratinjau tidak menonton videonya.',
+        provenance: null,
+        detector: null
       },
-      fact: factAvailable
-        ? {
-            available: true,
-            claim: firstSentence(text),
-            status: fact,
-            sources: [
-              {
-                title: fact === 'CONTRADICTS' ? 'Contoh artikel pemeriksaan fakta' : 'Contoh pengumuman resmi',
-                publisher: 'Sumber Contoh',
-                url: fact === 'CONTRADICTS' ? 'https://example.org/contoh-cek-fakta' : 'https://example.org/contoh-pengumuman',
-                match: fact
-              }
-            ]
-          }
-        : unavailableFact(),
-      link: link
-        ? {
-            available: true,
-            score: link.score,
-            final_url: link.finalUrl,
-            redirect_chain: link.redirectChain,
-            reasons: link.reasons
-          }
-        : unavailableLink()
+      fact: unavailableFact(),
+      link: {
+        available: true,
+        score: link.score,
+        final_url: link.finalUrl,
+        redirect_chain: link.redirectChain,
+        reasons: link.reasons
+      }
     },
-    tactics
+    tactics: [],
+    video: {
+      status: 'OK',
+      reason: '',
+      platform,
+      duration_sec: 47,
+      upload_date: '2026-11-07',
+      platform_ai_label: platform !== 'x',
+      frames: VIDEO_FRAME_TIMES.map((at_sec, i) => ({ at_sec, thumb: drawFrame(width, height, i / last) })),
+      audio_analyzed: true,
+      summary:
+        'Air keruh menerjang jalan kota dan menyeret beberapa mobil. Di layar ada teks "JAKARTA PAGI INI", dan seorang pria terdengar panik sambil meminta video ini disebarkan.',
+      transcript:
+        'Ya Allah, lihat ini, airnya sudah setinggi atap mobil. Ini Jakarta pagi ini, saudara-saudara. Tolong sebarkan ke keluarga supaya semua waspada.',
+      manipulation: { score: 14, indicators: [] },
+      context: {
+        score: 58,
+        indicators: [
+          'Frame 3: rambu jalan tidak berbahasa Indonesia, padahal keterangan menyebut Jakarta',
+          'Frame 5: bentuk bangunan dan kendaraan tidak seperti di Jakarta'
+        ]
+      },
+      creator_disclosure: { level: 'weak', phrase: '#ai' },
+      web_evidence: [
+        {
+          title: '[HOAKS] Video banjir Jakarta pagi ini adalah hasil AI',
+          url: 'https://example.org/cek-fakta/banjir-jakarta-ai',
+          publisher: 'turnbackhoax.id',
+          says: 'AI'
+        }
+      ],
+      // Preview data only: the mode never watches the video or searches.
+      w5h1: {
+        what: 'Banjir besar menyeret beberapa mobil di jalan kota.',
+        who: 'Seorang pria merekam dan bersuara panik; tidak ada tokoh yang dikenali.',
+        when: 'Disebut "pagi ini"; tanggal kejadian tidak terlihat.',
+        where: 'Disebut Jakarta, tetapi rambu jalan tidak berbahasa Indonesia.',
+        why: 'Tidak dijelaskan di video.',
+        how: 'Air keruh naik setinggi atap mobil dan mengalir deras.'
+      },
+      research: {
+        query: 'video banjir Jakarta mobil terseret',
+        status: 'FOUND',
+        sources: [
+          {
+            title: '[HOAKS] Video banjir Jakarta pagi ini adalah hasil AI',
+            url: 'https://example.org/cek-fakta/banjir-jakarta-ai',
+            domain: 'turnbackhoax.id',
+            snippet: 'Contoh data pratinjau: video ini dinyatakan bukan rekaman banjir Jakarta.',
+            published: '2026-11-08'
+          }
+        ]
+      }
+    }
   });
 }
 
+/* ------------------------------------------------------------- builders */
+
 function urlDossier(payload: MockPayload): DossierParsed {
   const url = (payload.url ?? '').trim();
+  const platform = videoPlatform(url);
+  if (platform) return videoDossier(url, platform);
   const link = analyzeUrl(url);
   const status = link.status;
-  const available = { ela: false, ai: true, fact: false, link: true };
+  // The browser preview cannot fetch the link's preview image, so there is
+  // no image for the AI check, as on the server when a link has none.
+  const available = { ela: false, ai: false, fact: false, link: true };
   const tactics: Tactic[] = [];
-  const indicators = link.reasons.map((reason) => reason.text);
 
   return baseDossier('URL', url, {
     status,
@@ -404,15 +478,23 @@ function urlDossier(payload: MockPayload): DossierParsed {
     explanationSimple: simpleSentence(status, 'UNVERIFIED'),
     basis: basisFor(available),
     notChecked: notCheckedFor(available),
-    floors: link.score >= 85 ? ['LINK_MALICIOUS'] : [],
+    // Mirrors the Go scorer: >= 90 is LINK_MALICIOUS, otherwise a link-only
+    // verdict of >= 45 (scoring.LinkStrongMin) is LINK_STRONG.
+    floors: link.score >= 90 ? ['LINK_MALICIOUS'] : link.score >= 45 ? ['LINK_STRONG'] : [],
+    // The browser preview cannot fetch other sites, which is exactly the
+    // "could not read" case the result page explains.
+    sourceMetadata: {
+      status: 'UNAVAILABLE',
+      platform: 'web',
+      via: '',
+      title: '',
+      author: '',
+      description: '',
+      site_name: ''
+    },
     pillars: {
       ela: unavailablePillar(),
-      ai: {
-        available: true,
-        score: Math.min(88, 20 + link.reasons.length * 18),
-        indicators,
-        caveat: 'Indikatif, bukan bukti pasti. Mode pratinjau memakai aturan alamat.'
-      },
+      ai: unavailableAI(),
       fact: unavailableFact(),
       link: {
         available: true,
@@ -456,15 +538,20 @@ function fileDossier(payload: MockPayload): DossierParsed {
         anomalies: [
           {
             bounding_box: [280, 300, 520, 720],
-            reason: 'Area ini memiliki perbedaan kompresi yang menonjol (contoh).'
+            reason: 'Area ini memiliki perbedaan kompresi yang menonjol (contoh).',
+            // Preview mode does not read the image, so nothing was measured.
+            evidence: null
           }
         ]
       },
       ai: {
         available: true,
-        score: 54,
-        indicators: ['Teks dalam gambar memuat ajakan mendesak'],
-        caveat: 'Indikatif, bukan bukti pasti. Mode pratinjau tidak membaca isi gambar.'
+        score: 30,
+        reliability: 0.5,
+        indicators: [],
+        caveat: 'Indikatif, bukan bukti pasti. Mode pratinjau tidak membaca isi gambar.',
+        provenance: NO_PROVENANCE,
+        detector: null
       },
       fact: unavailableFact(),
       link: unavailableLink()
@@ -476,13 +563,11 @@ function fileDossier(payload: MockPayload): DossierParsed {
 /** Builds a deterministic-enough example dossier for any input. */
 export function buildMockDossier(kind: MockKind, payload: MockPayload): DossierParsed {
   switch (kind) {
-    case 'url':
-      return urlDossier(payload);
     case 'file':
       return fileDossier(payload);
-    case 'text':
+    case 'url':
     default:
-      return textDossier(payload);
+      return urlDossier(payload);
   }
 }
 

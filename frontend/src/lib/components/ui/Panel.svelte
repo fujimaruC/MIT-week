@@ -3,14 +3,13 @@
 
   interface Props {
     title?: string;
-    eyebrow?: string;
-    /** Colour role of the panel surface. `white` is the default card. */
+    /** Colour role of the panel surface. `white` is the default translucent pane. */
     tone?: 'white' | 'paper' | 'ink' | 'safe' | 'yellow' | 'coral' | 'indigo' | 'soft';
     children: Snippet;
     footer?: Snippet;
   }
 
-  let { title, eyebrow, tone = 'white', children, footer }: Props = $props();
+  let { title, tone = 'white', children, footer }: Props = $props();
 
   const TONE_CLASS: Record<NonNullable<Props['tone']>, string> = {
     white: '',
@@ -24,10 +23,7 @@
   };
 </script>
 
-<section class="panel lift {TONE_CLASS[tone]}">
-  {#if eyebrow}
-    <p class="eyebrow">{eyebrow}</p>
-  {/if}
+<section class="panel {TONE_CLASS[tone]}">
   {#if title}
     <h2>{title}</h2>
   {/if}
@@ -38,30 +34,29 @@
 </section>
 
 <style>
+  /* A tonal pane, as Gemini draws its cards: no border, a round corner. */
   .panel {
-    background: var(--white);
-    border: var(--border-width) solid var(--border);
+    background: var(--card);
+    border: 0;
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-hard-lg);
-    padding: clamp(1.25rem, 3vw, 1.9rem);
+    box-shadow: none;
+    padding: clamp(1.1rem, 3vw, 1.6rem);
     min-width: 0;
-    margin-bottom: var(--space-5);
   }
   .panel--paper { background: var(--paper); }
-  .panel--ink { background: var(--panel-dark); color: var(--on-panel-dark); box-shadow: var(--shadow-indigo); }
+  .panel--ink { background: var(--panel-dark); color: var(--on-panel-dark); }
   .panel--safe { background: var(--safe); color: var(--on-fill); }
   .panel--yellow { background: var(--yellow); color: var(--on-fill); }
   .panel--coral { background: var(--coral); color: var(--on-fill); }
-  .panel--indigo { background: var(--indigo); color: var(--on-brand); box-shadow: var(--shadow-hard-xl); }
-  .panel--soft { background: var(--indigo-soft); color: var(--ink); }
+  .panel--indigo { background: var(--indigo-soft); color: var(--ink); }
+  .panel--soft { background: var(--surface-2); color: var(--ink); }
 
-  h2 { font-size: 1.45em; margin: 0 0 var(--space-4); }
+  h2 { font-size: var(--text-lg); font-weight: 500; margin: 0 0 var(--space-4); }
   .body { min-width: 0; }
   .footer {
     margin-top: var(--space-5);
     padding-top: var(--space-4);
-    border-top: var(--border-width) solid currentColor;
+    border-top: 1px solid var(--border);
   }
-  .panel--ink :global(a),
-  .panel--indigo :global(a) { color: var(--on-brand); }
+  .panel--ink :global(a) { color: var(--on-panel-dark); }
 </style>

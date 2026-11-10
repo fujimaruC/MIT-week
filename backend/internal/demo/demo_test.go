@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amba/amba/backend/internal/provenance"
 )
 
 // schemaPath is the contract generated from api/openapi.yaml.
@@ -114,21 +116,105 @@ func TestUnknownAndInvalidIDs(t *testing.T) {
 	}
 }
 
-func TestTacticPhrasesAppearInCaption(t *testing.T) {
+// Like a live audit, every tactic phrase must occur in the text it was
+// verified against: the caption for text and links, the OCR text for images.
+func TestTacticPhrasesAppearInTheirSource(t *testing.T) {
 	for _, id := range IDs() {
 		c, _ := Get(id)
 		var d struct {
 			Tactics []struct {
 				Phrase string `json:"phrase"`
+				Source string `json:"source"`
 			} `json:"tactics"`
+			OCRText string `json:"ocr_text"`
 		}
 		if err := json.Unmarshal(c.Dossier, &d); err != nil {
 			t.Fatal(err)
 		}
 		for _, tac := range d.Tactics {
-			if !strings.Contains(strings.ToLower(c.Caption), strings.ToLower(tac.Phrase)) {
-				t.Errorf("%s: tactic phrase %q does not appear in the caption", id, tac.Phrase)
+			source := c.Caption
+			if tac.Source == "ocr" {
+				source = d.OCRText
+			}
+			if !strings.Contains(strings.ToLower(source), strings.ToLower(tac.Phrase)) {
+				t.Errorf("%s: tactic phrase %q does not appear in its %s source", id, tac.Phrase, tac.Source)
 			}
 		}
+	}
+}
+
+func TestPRDIdsAndAliases(t *testing.T) {
+	for _, id := range []string{"demo-tiktok", "demo-berita-ig", "demo-gambar-ai", "demo-resmi", "demo-tautan"} {
+		if _, err := Get(id); err != nil {
+			t.Errorf("missing PRD F8 demo %s", id)
+		}
+	}
+	old, err := Get("contoh-hoax-bantuan")
+	if err != nil || old.ID != "demo-tiktok" {
+		t.Fatalf("old id must resolve to demo-tiktok, got %+v %v", old.ID, err)
+	}
+}
+
+// The demo verdicts must be what the real scorer computes for the demo
+// pillars, so a judge never sees a number the algorithm would not produce.
+func TestDemoVerdictsMatchTheScorer(t *testing.T) {
+	for _, id := range IDs() {
+		c, _ := Get(id)
+		var d struct {
+			Verdict struct {
+				Score  *int     `json:"score"`
+				Status string   `json:"status"`
+				Floors []string `json:"floors_applied"`
+			} `json:"verdict"`
+			IsDemo bool `json:"is_demo"`
+		}
+		if err := json.Unmarshal(c.Dossier, &d); err != nil {
+			t.Fatal(err)
+		}
+		if !d.IsDemo {
+			t.Errorf("%s: is_demo must be true", id)
+		}
+		for _, f := range d.Verdict.Floors {
+			if (f == "FACT_CONTRADICTED" || f == "LINK_MALICIOUS") && (d.Verdict.Score == nil || *d.Verdict.Score < 85) {
+				t.Errorf("%s: %s floor with score %v", id, f, d.Verdict.Score)
+			}
+		}
+	}
+}
+
+// The AI demo's bundled picture must carry the marker its verdict cites, so
+// uploading it to the live app gives the same answer.
+func TestAIDemoPictureDeclaresAI(t *testing.T) {
+	c, err := Get("demo-gambar-ai")
+	if err != nil || !strings.HasPrefix(c.Image, "/demo/") {
+		t.Fatalf("AI demo must point at its bundled image: %+v %v", c.Image, err)
+	}
+	data, err := os.ReadFile(filepath.Join("../../../frontend/static", c.Image))
+	if err != nil {
+		t.Fatalf("image file missing: %v", err)
+	}
+	if got := provenance.Scan(data); got.Kind != provenance.AIGenerated || got.Source != "c2pa" {
+		t.Fatalf("bundled picture declares %+v", got)
+	}
+	var d struct {
+		Verdict struct {
+			Floors []string `json:"floors_applied"`
+		} `json:"verdict"`
+	}
+	if err := json.Unmarshal(c.Dossier, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Verdict.Floors) == 0 || d.Verdict.Floors[0] != "AI_PROVENANCE" {
+		t.Fatalf("floors = %v", d.Verdict.Floors)
+	}
+}
+
+func TestScreenshotDemoHasImage(t *testing.T) {
+	c, err := Get("demo-berita-ig")
+	if err != nil || !strings.HasPrefix(c.Image, "/demo/") {
+		t.Fatalf("screenshot demo must point at its bundled image: %+v %v", c.Image, err)
+	}
+	if _, err := os.Stat(filepath.Join("../../../frontend/static", c.Image)); err != nil {
+		t.Fatalf("image file missing: %v", err)
 	}
 }

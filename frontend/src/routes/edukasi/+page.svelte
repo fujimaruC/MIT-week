@@ -1,266 +1,190 @@
 <script lang="ts">
-  import Button from '$lib/components/ui/Button.svelte';
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { t } from '$lib/i18n/index.svelte';
+  import Icon, { type IconName } from '$lib/components/ui/Icon.svelte';
+  import Quiz from '$lib/components/belajar/Quiz.svelte';
+  import forensicQuiz from '$lib/data/forensic-quiz.json';
+  import { AI_CUES, HOAX_CUES, CHECK_STEPS, UI, type Text } from '$lib/data/belajar';
 
-  const modus = [
-    {
-      id: 'bansos',
-      tone: 'yellow',
-      icon: 'alert',
-      title: 'Bantuan sosial palsu',
-      body: 'Akun meniru program bantuan resmi, meminta Anda mengisi data dan menyebarkan tautan ke grup lain.'
-    },
-    {
-      id: 'judul',
-      tone: 'soft',
-      icon: 'image',
-      title: 'Judul berita yang diedit',
-      body: 'Gambar tangkapan layar judul berita diubah agar terbaca lebih mengejutkan daripada artikel aslinya.'
-    },
-    {
-      id: 'shortlink',
-      tone: 'safe',
-      icon: 'link',
-      title: 'Tautan pendek ke halaman palsu',
-      body: 'Tautan dipendekkan supaya alamat aslinya tidak terlihat, lalu diarahkan ke halaman yang meminta kata sandi.'
-    }
-  ] as const;
+  const tx = (text: Text): string => text.id;
 
-  const questions = [
-    {
-      id: 'q1',
-      question: 'Gambar terlihat punya area lebih terang setelah diperiksa. Apa artinya?',
-      options: [
-        { id: 'a', text: 'Gambar pasti palsu.', correct: false },
-        { id: 'b', text: 'Ada indikasi area itu pernah diubah. Perlu dicek lagi.', correct: true },
-        { id: 'c', text: 'Gambar pasti asli.', correct: false }
-      ],
-      explain:
-        'Area terang hanya menunjukkan perbedaan hasil kompresi. Itu petunjuk, bukan bukti. Memotong atau menyimpan ulang gambar juga bisa menimbulkannya.'
-    },
-    {
-      id: 'q2',
-      question: 'Mengapa analisis gambar melemah pada tangkapan layar?',
-      options: [
-        { id: 'a', text: 'Karena tangkapan layar sudah disimpan ulang oleh ponsel, sehingga perbedaannya tersebar.', correct: true },
-        { id: 'b', text: 'Karena tangkapan layar selalu lebih kecil.', correct: false },
-        { id: 'c', text: 'Karena tangkapan layar tidak bisa dibaca komputer.', correct: false }
-      ],
-      explain:
-        'Tangkapan layar melewati proses penyimpanan ulang, jadi seluruh gambar sudah berubah. Perubahan suntingan jadi lebih sulit dibedakan.'
-    },
-    {
-      id: 'q3',
-      question: 'Pesan meminta Anda menyebarkan ke 10 grup hari ini juga. Tindakan paling aman?',
-      options: [
-        { id: 'a', text: 'Sebarkan dulu, nanti dicek.', correct: false },
-        { id: 'b', text: 'Cek sumber resminya, jangan sebarkan sebelum jelas.', correct: true },
-        { id: 'c', text: 'Balas dengan tuduhan bahwa pengirimnya penipu.', correct: false }
-      ],
-      explain:
-        'Tekanan waktu adalah taktik yang umum. Menahan diri dan memeriksa sumber resmi adalah langkah paling aman.'
-    }
+  // Each sign is one short line; its explanation opens on tap (Sir, 10 Nov
+  // 2026: as little text on screen as possible).
+  const GROUPS: Array<{ id: string; icon: IconName; title: Text; items: Array<{ id: string; title: Text; body: Text }> }> = [
+    { id: 'video-ai', icon: 'sparkle', title: UI.ai.title, items: AI_CUES },
+    { id: 'video-hoaks', icon: 'alert', title: UI.hoax.title, items: HOAX_CUES }
   ];
 
-  let answers = $state<Record<string, string>>({});
-  let checked = $state(false);
+  // ---- ELA practice (PRD F7): three synthetic images with the heat map AMBA computed. ----
+  type Guess = 'asli' | 'diedit' | 'belum-pasti';
+  const GUESSES: Guess[] = ['asli', 'diedit', 'belum-pasti'];
+  const forensic = forensicQuiz.items as Array<{ id: string; image: string; ela: string; answer: Guess }>;
+  let guesses = $state<Record<string, Guess | undefined>>({});
+  let revealed = $state<Record<string, boolean>>({});
 
-  const score = $derived(
-    questions.filter((q) => q.options.find((o) => o.id === answers[q.id])?.correct).length
-  );
-
-  function reset(): void {
-    answers = {};
-    checked = false;
-  }
 </script>
 
 <svelte:head>
-  <title>Belajar — AMBA</title>
-  <meta
-    name="description"
-    content="Tiga modus penipuan yang sering muncul dan kuis singkat untuk melatih kepekaan. Tanpa nilai yang disimpan."
-  />
+  <title>{tx(UI.title)}</title>
+  <meta name="description" content={tx(UI.description)} />
 </svelte:head>
 
-<section class="head">
-  <p class="eyebrow">Sekolah scam</p>
-  <h1 class="h1">Belajar mengenali tanda bahaya</h1>
-  <p class="lede">
-    Tiga modus yang sering muncul, lalu tiga pertanyaan singkat. Tidak ada nilai yang disimpan.
-  </p>
-</section>
+<div class="belajar">
+  <header class="head">
+    <h1 class="h1">{tx(UI.h1)}</h1>
+    <p class="lede">{tx(UI.lede)}</p>
+  </header>
 
-<section aria-labelledby="modus-title">
-  <h2 class="h2" id="modus-title">Modus yang sering terjadi</h2>
-  <div class="grid">
-    {#each modus as m (m.id)}
-      <article class="mode card lift mode--{m.tone}" id={`modus-${m.id}`}>
-        <span class="icon" aria-hidden="true"><Icon name={m.icon} size={28} /></span>
-        <h3>{m.title}</h3>
-        <p>{m.body}</p>
-      </article>
-    {/each}
-  </div>
-</section>
-
-<section class="quiz" aria-labelledby="kuis-title">
-  <h2 class="h2" id="kuis-title">Kuis singkat</h2>
-  <p class="quiz-lede">Pilih satu jawaban per pertanyaan, lalu periksa di akhir.</p>
-
-  {#each questions as q, i (q.id)}
-    <div class="q card lift" role="radiogroup" aria-labelledby={`q-label-${q.id}`}>
-      <p class="q-legend" id={`q-label-${q.id}`}>
-        <span class="q-num" aria-hidden="true">{i + 1}</span>
-        {q.question}
-      </p>
-      {#each q.options as option (option.id)}
-        <label
-          class="option"
-          class:correct={checked && option.correct}
-          class:wrong={checked && answers[q.id] === option.id && !option.correct}
-        >
-          <input type="radio" name={q.id} value={option.id} bind:group={answers[q.id]} disabled={checked} />
-          <span>{option.text}</span>
-          {#if checked && option.correct}
-            <span class="verdict-tag">Jawaban tepat</span>
-          {:else if checked && answers[q.id] === option.id}
-            <span class="verdict-tag">Kurang tepat</span>
-          {/if}
-        </label>
-      {/each}
-      {#if checked}
-        <p class="explain">{q.explain}</p>
-      {/if}
-    </div>
+  {#each GROUPS as g (g.id)}
+    <section id={g.id} aria-labelledby={`${g.id}-title`}>
+      <h2 class="h2" id={`${g.id}-title`}><span class="h2-ic" aria-hidden="true"><Icon name={g.icon} size={20} /></span>{tx(g.title)}</h2>
+      <ul class="cues">
+        {#each g.items as c (c.id)}
+          <li>
+            <details class="cue">
+              <summary><span>{tx(c.title)}</span><Icon name="chevron" size={18} /></summary>
+              <p>{tx(c.body)}</p>
+            </details>
+          </li>
+        {/each}
+      </ul>
+    </section>
   {/each}
 
-  <div class="actions">
-    {#if !checked}
-      <Button onclick={() => (checked = true)} disabled={Object.keys(answers).length < questions.length}>
-        Periksa jawaban
-      </Button>
-    {:else}
-      <p class="result" role="status">
-        <span class="result-num">{score}<span class="result-total">/{questions.length}</span></span>
-        benar.
-      </p>
-      <Button variant="quiet" onclick={reset}>
-        <Icon name="refresh" size={18} /> Ulangi
-      </Button>
-    {/if}
-  </div>
-</section>
+  <section class="forensic" aria-labelledby="forensic-title">
+    <h2 class="h2" id="forensic-title"><span class="h2-ic" aria-hidden="true"><Icon name="image" size={20} /></span>{t('fq.title')}</h2>
+    <div class="forensic-grid">
+      {#each forensic as item, i (item.id)}
+        <article class="f-item">
+          <img class="f-img" src={item.image} alt={t('fq.imageAlt', { n: i + 1 })} width="360" height="480" loading="lazy" />
+          <div class="f-body">
+            <p class="f-legend" id={`fq-${item.id}`}>{t('fq.question')}</p>
+            <div class="f-options" role="radiogroup" aria-labelledby={`fq-${item.id}`}>
+              {#each GUESSES as g (g)}
+                <label class="option">
+                  <input type="radio" name={`fq-${item.id}`} value={g} bind:group={guesses[item.id]} />
+                  <span>{t(`fq.opt.${g}`)}</span>
+                </label>
+              {/each}
+            </div>
+            <button
+              class="btn btn--tonal btn--sm"
+              type="button"
+              aria-expanded={!!revealed[item.id]}
+              aria-controls={`fq-panel-${item.id}`}
+              disabled={!guesses[item.id]}
+              onclick={() => (revealed = { ...revealed, [item.id]: !revealed[item.id] })}
+            >
+              <Icon name="image" size={16} /> {revealed[item.id] ? t('fq.hide') : t('fq.reveal')}
+            </button>
+            {#if revealed[item.id]}
+              <div class="f-reveal" id={`fq-panel-${item.id}`}>
+                <figure>
+                  <img src={item.ela} alt={t('fq.elaAlt', { n: i + 1 })} width="360" height="480" />
+                  <figcaption>{t('fq.ela')}</figcaption>
+                </figure>
+                <p class="f-verdict" role="status">
+                  {guesses[item.id] === item.answer ? t('fq.right') : t('fq.wrong', { answer: t(`fq.opt.${item.answer}`) })}
+                </p>
+                <p class="f-explain">{t(`fq.explain.${item.answer}`)}</p>
+              </div>
+            {/if}
+          </div>
+        </article>
+      {/each}
+    </div>
+  </section>
+
+  <section id="kuis" aria-labelledby="quiz-title">
+    <h2 class="h2" id="quiz-title"><span class="h2-ic" aria-hidden="true"><Icon name="check" size={20} /></span>{tx(UI.quiz.title)}</h2>
+    <Quiz />
+  </section>
+
+  <section id="cek-sendiri" aria-labelledby="check-title">
+    <h2 class="h2" id="check-title"><span class="h2-ic" aria-hidden="true"><Icon name="search" size={20} /></span>{tx(UI.check.title)}</h2>
+    <ul class="cues">
+      {#each CHECK_STEPS as step (step.id)}
+        <li>
+          <details class="cue">
+            <summary><span>{tx(step.title)}</span><Icon name="chevron" size={18} /></summary>
+            <p>{tx(step.body)}</p>
+            {#if step.link}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external site, not an app route -->
+              <a class="ext" href={step.link.href} target="_blank" rel="noopener noreferrer">
+                {step.link.label}<Icon name="arrow-up-right" size={16} />
+                <span class="sr-only"> ({tx(UI.check.newTab)})</span>
+              </a>
+            {/if}
+          </details>
+        </li>
+      {/each}
+    </ul>
+  </section>
+</div>
 
 <style>
-  .head { max-width: 54rem; margin-bottom: var(--space-7); }
-  h1 { margin-bottom: var(--space-3); }
-  .grid { display: grid; grid-template-columns: 1fr; gap: var(--space-5); margin-top: var(--space-5); }
-  @media (min-width: 48rem) { .grid { grid-template-columns: repeat(3, 1fr); } }
-  .mode { min-width: 0; padding: clamp(1.25rem, 3vw, 1.75rem); display: flex; flex-direction: column; height: 100%; }
-  .mode--yellow { background: var(--yellow); }
-  .mode--soft { background: var(--indigo-soft); }
-  .mode--safe { background: var(--safe); }
-  .icon {
+  .belajar { display: grid; gap: var(--space-7); }
+  .head { display: grid; gap: var(--space-3); max-width: 54rem; }
+  .head .lede { margin: 0; }
+  section { scroll-margin-top: 6rem; }
+  .h2 { display: flex; align-items: center; gap: 12px; margin: 0 0 var(--space-4); }
+  .h2-ic {
     display: grid;
     place-items: center;
-    width: 52px;
-    height: 52px;
-    margin-bottom: var(--space-4);
-    background: var(--white);
-    border: var(--border-width) solid var(--border);
-    border-radius: 16px;
-    box-shadow: var(--shadow-hard-xs);
-  }
-  h3 { font-size: 1.35em; margin: 0 0 var(--space-2); }
-  .mode p { margin: 0; font-size: 0.98em; line-height: 1.45; }
-
-  .quiz { margin-top: var(--space-9); }
-  .quiz-lede { margin: var(--space-3) 0 var(--space-5); color: var(--body-2); max-width: var(--measure); }
-  .q { margin: 0 0 var(--space-4); padding: clamp(1.1rem, 3vw, 1.6rem); }
-  /* Desktop: question on the left, its three answers stacked on the right, so
-   * the card carries its full width instead of trailing off into paper. */
-  @media (min-width: 64rem) {
-    .q {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-      column-gap: clamp(2rem, 4vw, 4rem);
-      align-items: start;
-    }
-    .q-legend { grid-column: 1; margin-bottom: 0; }
-    .q :global(.option) { grid-column: 2; }
-    .explain { grid-column: 1 / -1; }
-  }
-  .q-legend {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-3);
-    padding: 0;
-    margin: 0 0 var(--space-4);
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 1.15em;
-    line-height: 1.3;
-  }
-  .q-num {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     flex: none;
-    background: var(--ink);
-    color: var(--on-ink);
-    border-radius: 10px;
-    font-size: 0.9em;
+    border-radius: 50%;
+    background: var(--indigo-soft);
+    color: var(--indigo-text);
   }
+
+  /* One short line per sign; the explanation opens under it. */
+  .cues { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 40rem) { .cues { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+  @media (min-width: 64rem) { .cues { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .cue { border-radius: var(--radius-md); background: var(--card); }
+  .cue summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: 56px;
+    padding: 0 var(--space-4);
+    font-weight: 500;
+    list-style: none;
+    cursor: pointer;
+  }
+  .cue summary::-webkit-details-marker { display: none; }
+  .cue summary:hover { background: var(--surface-2); border-radius: var(--radius-md); }
+  .cue summary :global(svg) { flex: none; color: var(--muted); transition: transform var(--dur-base) var(--ease-out); }
+  .cue[open] summary :global(svg) { transform: rotate(180deg); }
+  .cue p { margin: 0; padding: 0 var(--space-4) var(--space-4); color: var(--body-2); line-height: 1.55; }
+  .ext { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0 var(--space-4) var(--space-3); font-weight: 500; color: var(--indigo-text); }
+
+  /* ELA practice */
+  .forensic-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+  .f-item { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-4); border-radius: var(--radius-lg); background: var(--card); }
+  .f-img, .f-reveal img { width: 100%; height: auto; border-radius: var(--radius-sm); display: block; }
+  .f-body, .f-reveal { display: grid; gap: var(--space-3); }
+  .f-body .f-legend { margin: 0; font-weight: 500; color: var(--ink); }
+  .f-options { display: grid; gap: var(--space-2); }
   .option {
     display: flex;
     align-items: center;
     gap: var(--space-3);
     min-height: 48px;
-    padding: var(--space-3);
-    border: 2px solid transparent;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition:
-      background-color var(--dur-fast) var(--ease-out),
-      border-color var(--dur-fast) var(--ease-out),
-      transform var(--dur-fast) var(--ease-out);
-  }
-  .option:hover { background: var(--indigo-tint); border-color: var(--ink); transform: translateX(3px); }
-  .option.correct:hover { background: var(--safe); }
-  .option.wrong:hover { background: var(--coral-tint); }
-  .option input { width: 22px; height: 22px; accent-color: var(--indigo); flex: none; }
-  .option.correct { background: var(--safe); border-color: var(--on-fill); }
-  .option.wrong { background: var(--coral-tint); border-color: var(--ink); }
-  .verdict-tag {
-    margin-left: auto;
-    padding: 2px 10px;
-    border: 2px solid var(--border);
-    border-radius: var(--radius-pill);
-    font-size: var(--text-xs);
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  .explain {
-    margin: var(--space-3) 0 0;
-    padding: var(--space-3) var(--space-4);
-    background: var(--paper);
-    border-left: 6px solid var(--indigo);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    color: var(--body-2);
-    font-size: var(--text-base);
-    max-width: var(--measure);
+    cursor: pointer;
   }
-  .actions { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; margin-top: var(--space-5); }
-  @media (max-width: 44rem) { .actions { flex-direction: column; align-items: stretch; } .actions :global(.btn) { width: 100%; justify-content: center; } }
-  .result { margin: 0; font-weight: 700; }
-  .result-num {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 2.4em;
-    letter-spacing: -0.03em;
-    margin-right: var(--space-2);
-  }
-  .result-total { font-size: 0.5em; color: var(--muted); }
+  .option:hover { background: var(--indigo-tint); }
+  .option:has(input:checked) { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+  .option input { width: 22px; height: 22px; accent-color: var(--brand); flex: none; }
+  .f-reveal figure { margin: 0; }
+  .f-reveal figcaption { font-size: var(--text-sm); color: var(--muted); margin-top: var(--space-1); }
+  .f-reveal p { margin: 0; }
+  .f-reveal .f-verdict { font-weight: 500; color: var(--ink); }
+
+
 </style>

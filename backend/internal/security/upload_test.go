@@ -98,6 +98,58 @@ func TestValidateUploadRejects(t *testing.T) {
 	_ = webpHeader
 }
 
+// webpFile builds a WebP container whose first chunk is typ with data.
+func webpFile(typ string, data []byte, more ...string) []byte {
+	body := append([]byte("WEBP"+typ), byte(len(data)), byte(len(data)>>8), byte(len(data)>>16), byte(len(data)>>24))
+	body = append(body, data...)
+	for _, m := range more {
+		body = append(body, m...)
+	}
+	n := len(body)
+	return append([]byte{'R', 'I', 'F', 'F', byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)}, body...)
+}
+
+// WebP has no decoder in the standard library; the header gives the size.
+func TestValidateUploadReadsWebPHeaders(t *testing.T) {
+	vp8x := webpFile("VP8X", []byte{0x10, 0, 0, 0, 0x7F, 0x02, 0x00, 0xDF, 0x01, 0x00})                 // 640x480, with ALPH flag
+	lossy := webpFile("VP8 ", []byte{0x50, 0x2C, 0x00, 0x9D, 0x01, 0x2A, 0x2C, 0x01, 0xC8, 0x00, 0, 0}) // 300x200
+	// Lossless: width-1 = 99, height-1 = 49 packed in 14-bit fields.
+	bits := uint32(99) | uint32(49)<<14
+	lossless := webpFile("VP8L", []byte{0x2F, byte(bits), byte(bits >> 8), byte(bits >> 16), byte(bits >> 24), 0, 0, 0, 0, 0})
+	for name, tc := range map[string]struct {
+		data []byte
+		w, h int
+	}{
+		"extended": {vp8x, 640, 480},
+		"lossy":    {lossy, 300, 200},
+		"lossless": {lossless, 100, 50},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, format, cfg, err := ValidateUpload(bytes.NewReader(tc.data), 10<<20)
+			if err != nil || format != "webp" || cfg.Width != tc.w || cfg.Height != tc.h {
+				t.Fatalf("got %s %dx%d %v, want webp %dx%d", format, cfg.Width, cfg.Height, err, tc.w, tc.h)
+			}
+		})
+	}
+
+	for name, tc := range map[string]struct {
+		data []byte
+		want error
+	}{
+		"bad start code": {webpFile("VP8 ", []byte{0x50, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x2C, 0x01, 0xC8, 0x00, 0, 0}), ErrUnsupported},
+		"bad signature":  {webpFile("VP8L", []byte{0x00, 1, 2, 3, 4, 0, 0, 0, 0, 0}), ErrUnsupported},
+		"unknown chunk":  {webpFile("ABCD", make([]byte, 10)), ErrUnsupported},
+		"too wide":       {webpFile("VP8X", []byte{0, 0, 0, 0, 0x87, 0x13, 0x00, 0x09, 0x00, 0x00}), ErrTooManyPixels}, // 5000x10
+		"animated":       {webpFile("VP8X", []byte{0x02, 0, 0, 0, 0x7F, 0x02, 0x00, 0xDF, 0x01, 0x00}, "ANIM\x06\x00\x00\x00"), ErrAnimated},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, _, _, err := ValidateUpload(bytes.NewReader(tc.data), 10<<20); !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateUploadSizeLimit(t *testing.T) {
 	data := encodeJPEG(t, 64, 64)
 	_, _, _, err := ValidateUpload(bytes.NewReader(data), int64(len(data)-1))

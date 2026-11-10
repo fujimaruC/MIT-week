@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-10T06:45:00Z",
+  "title": "Design System: AMBA",
+  "extensions": {
+    "colorMeta": {
+      "terracotta": { "role": "primary", "displayName": "Terracotta", "canonical": "#a9502e", "tonalRamp": ["#7e3b24", "#94452a", "#a9502e", "#d97757", "#e8957a"] },
+      "ivory-ground": { "role": "neutral", "displayName": "Ivory Ground", "canonical": "#f4f3ee", "tonalRamp": ["#e4e1d8", "#eceae3", "#efede6", "#f4f3ee", "#fbfaf7"] },
+      "charcoal-ink": { "role": "neutral", "displayName": "Charcoal Ink", "canonical": "#1f1e1c", "tonalRamp": ["#1f1e1c", "#45443f", "#5d5c56", "#8f8c82", "#dad7ce"] },
+      "night-ground": { "role": "neutral", "displayName": "Night Ground", "canonical": "#1e1d1b", "tonalRamp": ["#141413", "#1e1d1b", "#252421", "#2a2926", "#3a3935"] },
+      "verdict-ok": { "role": "semantic", "displayName": "Verdict Ok", "canonical": "#2b6646", "tonalRamp": ["#22342a", "#2b6646", "#8cc8a1", "#dce9df"] },
+      "verdict-warn": { "role": "semantic", "displayName": "Verdict Warn", "canonical": "#8a5300", "tonalRamp": ["#352b1a", "#8a5300", "#e2b455", "#f2e2be"] },
+      "verdict-err": { "role": "semantic", "displayName": "Verdict Err", "canonical": "#a3302a", "tonalRamp": ["#3e2420", "#a3302a", "#f08a79", "#f3d2c9"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The home headline only, at most two lines." },
+      "headline": { "displayName": "Headline", "purpose": "Page titles." },
+      "title": { "displayName": "Title", "purpose": "Section headings and the verdict sentence." },
+      "body": { "displayName": "Body", "purpose": "Reading text in Atkinson Hyperlegible for older readers." },
+      "label": { "displayName": "Label", "purpose": "Buttons, nav, field labels; never uppercase or tracked." }
+    },
+    "shadows": [
+      { "name": "glass", "value": "inset 0 1px 0 rgba(255,255,255,.9), 0 0 0 1px rgba(31,30,28,.1), 0 1px 2px rgba(31,30,28,.06), 0 22px 44px -26px rgba(31,30,28,.32)", "purpose": "Frosted surfaces: header, checker, verdict lens, error pane." },
+      { "name": "raised", "value": "0 1px 2px rgba(31,30,28,.06), 0 10px 24px -14px rgba(31,30,28,.22)", "purpose": "Primary button and hovered controls." },
+      { "name": "resting", "value": "0 1px 2px rgba(31,30,28,.06)", "purpose": "Translucent panes and selected segments." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Every state change and the frost clearing." },
+      { "name": "dur-fast", "value": "140ms", "purpose": "Hover and press feedback." },
+      { "name": "dur-base", "value": "220ms", "purpose": "Control state changes." },
+      { "name": "dur-slow", "value": "520ms", "purpose": "The verdict lens clearing; collapses to 0 under reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "40rem" },
+      { "name": "tablet", "value": "48rem" },
+      { "name": "hero-stack", "value": "60rem" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action per screen: Periksa, Ke beranda sekarang.",
+      "html": "<button class=\"ds-btn-primary\">Periksa</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; min-height: 52px; padding: 0 1.5rem; border: 1px solid transparent; border-radius: 14px; background: var(--brand, #a9502e); color: var(--on-brand, #fff); font: 700 1.125rem/1.15 'Atkinson Hyperlegible', system-ui, sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 1px 2px rgba(31,30,28,.06), 0 10px 24px -14px rgba(31,30,28,.22); cursor: pointer; transition: background-color 140ms cubic-bezier(.22,1,.36,1), transform 140ms; } .ds-btn-primary:hover { background: var(--brand-hover, #94452a); } .ds-btn-primary:active { background: var(--brand-deep, #7e3b24); transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 3px solid var(--focus, #a9502e); outline-offset: 3px; }"
+    },
+    {
+      "name": "Glass Button",
+      "kind": "button",
+      "refersTo": "button-glass",
+      "description": "Secondary actions on the page light: Mulai belajar, Tempel.",
+      "html": "<button class=\"ds-btn-glass\">Mulai belajar</button>",
+      "css": ".ds-btn-glass { display: inline-flex; align-items: center; min-height: 52px; padding: 0 1.5rem; border: 1px solid rgba(31,30,28,.1); border-radius: 14px; background: rgba(255,255,255,.8); color: #1f1e1c; font: 700 1.125rem/1.15 'Atkinson Hyperlegible', system-ui, sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 1px 2px rgba(31,30,28,.06); cursor: pointer; transition: background-color 140ms, box-shadow 220ms; } .ds-btn-glass:hover { background: #fbfaf7; box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 10px 24px -14px rgba(31,30,28,.22); } .ds-btn-glass:focus-visible { outline: 3px solid #a9502e; outline-offset: 3px; }"
+    },
+    {
+      "name": "Link Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Solid field inside the glass checker; terracotta focus ring.",
+      "html": "<label class=\"ds-field\"><span>Tautan video atau postingan</span><input class=\"ds-input\" placeholder=\"Tempel tautan di sini\" /></label>",
+      "css": ".ds-field { display: grid; gap: .5rem; font: 700 .9375rem 'Atkinson Hyperlegible', system-ui, sans-serif; color: #45443f; } .ds-input { min-height: 54px; padding: 12px 1rem; border: 1px solid #dad7ce; border-radius: 14px; background: #fff; color: #1f1e1c; font: 400 1.125rem 'Atkinson Hyperlegible', system-ui, sans-serif; box-shadow: inset 0 1px 2px rgba(31,30,28,.05); } .ds-input::placeholder { color: #5d5c56; opacity: 1; } .ds-input:hover { border-color: #8f8c82; } .ds-input:focus-visible { outline: none; border-color: #a9502e; box-shadow: 0 0 0 3px rgba(169,80,46,.28); }"
+    },
+    {
+      "name": "Glass Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Sticky frosted bar; current page is a raised neutral segment.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link\" aria-current=\"page\">Periksa</a><a class=\"ds-nav-link\">Belajar</a><a class=\"ds-nav-link\">Tentang</a></nav>",
+      "css": ".ds-nav { display: flex; gap: 2px; padding: 10px; background: rgba(255,255,255,.62); -webkit-backdrop-filter: blur(20px) saturate(1.35); backdrop-filter: blur(20px) saturate(1.35); border-bottom: 1px solid rgba(31,30,28,.1); } .ds-nav-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 10px; color: #45443f; font: 700 .9375rem 'Atkinson Hyperlegible', system-ui, sans-serif; text-decoration: none; } .ds-nav-link:hover { background: #eceae3; color: #1f1e1c; } .ds-nav-link[aria-current='page'] { background: rgba(255,255,255,.8); color: #1f1e1c; box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 0 0 1px rgba(31,30,28,.1); }"
+    },
+    {
+      "name": "Verdict Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A verdict stated with icon and words; colour never alone.",
+      "html": "<span class=\"ds-chip ds-chip--err\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 4l9 16H3z\"/><path d=\"M12 10v4M12 17h.01\"/></svg>Terindikasi hoaks</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: .5rem; min-height: 32px; padding: 3px 12px; border-radius: 999px; border: 1px solid #dad7ce; background: rgba(255,255,255,.8); color: #1f1e1c; font: 700 .9375rem 'Atkinson Hyperlegible', system-ui, sans-serif; } .ds-chip--err { color: #a3302a; background: #f8e6e1; border-color: rgba(163,48,42,.3); }"
+    },
+    {
+      "name": "Glass Pane",
+      "kind": "card",
+      "refersTo": "glass",
+      "description": "The frosted surface: header, checker, verdict lens, error pane. Only where something is under it.",
+      "html": "<div class=\"ds-glass\"><h3>Halaman ini tidak ada</h3><p>Tautannya mungkin salah ketik, atau halamannya sudah dipindahkan.</p></div>",
+      "css": ".ds-glass { padding: 1.75rem; border-radius: 22px; background: rgba(255,255,255,.62); -webkit-backdrop-filter: blur(20px) saturate(1.35); backdrop-filter: blur(20px) saturate(1.35); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 0 0 1px rgba(31,30,28,.1), 0 1px 2px rgba(31,30,28,.06), 0 22px 44px -26px rgba(31,30,28,.32); color: #1f1e1c; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; } .ds-glass h3 { margin: 0 0 .5rem; font: 600 1.6rem/1.12 'Bricolage Grotesque Variable', 'Helvetica Neue', Arial, sans-serif; letter-spacing: -.022em; } .ds-glass p { margin: 0; color: #45443f; }"
+    },
+    {
+      "name": "Verdict Lens",
+      "kind": "custom",
+      "refersTo": "verdict-lens",
+      "description": "Signature: the verdict on frosted glass over the user's own image; the frost clears as the verdict lands.",
+      "html": "<section class=\"ds-lens\"><div class=\"ds-lens-pane\"><p class=\"ds-lens-verdict\">Terindikasi hoaks</p><p class=\"ds-lens-sentence\">Kabar ini dibantah sumber terpercaya. Jangan disebarkan.</p><p class=\"ds-lens-score\">91<small>/100</small></p></div></section>",
+      "css": ".ds-lens { position: relative; padding: 1.5rem; border-radius: 28px; background: radial-gradient(30rem 18rem at 100% 0%, rgba(163,48,42,.3), transparent 70%), radial-gradient(24rem 16rem at 0% 100%, rgba(96,125,139,.2), transparent 70%), #f4f3ee; box-shadow: 0 0 0 1px rgba(31,30,28,.1), 0 10px 24px -14px rgba(31,30,28,.22); } .ds-lens-pane { padding: 1.5rem; border-radius: 22px; background: rgba(255,255,255,.8); -webkit-backdrop-filter: blur(20px) saturate(1.3); backdrop-filter: blur(20px) saturate(1.3); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 0 0 1px rgba(31,30,28,.1); font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; } .ds-lens-verdict { margin: 0; color: #a3302a; font-weight: 700; } .ds-lens-sentence { margin: .75rem 0; font: 650 1.75rem/1.16 'Bricolage Grotesque Variable', 'Helvetica Neue', Arial, sans-serif; color: #1f1e1c; } .ds-lens-score { margin: 0; font: 650 2.8rem/1 'Bricolage Grotesque Variable', sans-serif; color: #a3302a; } .ds-lens-score small { font-size: 1.25rem; color: #45443f; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Inspection Glass",
+    "overview": "What a family wants to verify sits behind frosted glass, and AMBA's verdict is what clears it. Glass is reserved for surfaces with something under them: the sticky header, the checker, the verdict lens over the user's own content, the error pane. Everything else is a quieter translucent pane or plain type on warm light. The palette is Claude-like and restrained (ivory and charcoal, one terracotta accent); light and dark are both glass and the device chooses.",
+    "keyCharacteristics": [
+      "Frosted glass only where something is under it",
+      "One terracotta accent: primary action, focus, risk meter",
+      "Verdict colours always with an icon and words",
+      "Lists on hairlines, not grids of equal cards",
+      "Page light: three soft fields and a fine grain, fixed to the viewport"
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Terracotta marks the action and the focus, nothing else; selections are raised neutral segments.", "section": "colors" },
+      { "name": "The Composite Rule", "body": "Checked colour tokens are the opaque colour a glass pane composites to; translucency lives only in --glass-* tokens.", "section": "colors" },
+      { "name": "The No-Eyebrow Rule", "body": "Nothing sits above a heading as a kicker; codes and categories go below the copy.", "section": "typography" },
+      { "name": "The Earned Blur Rule", "body": "backdrop-filter appears only on the header, the checker, the verdict lens and the error pane.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do show the thing being checked beside its verdict.",
+      "Do keep terracotta for the primary action and focus.",
+      "Do put lists of equal items on hairlines.",
+      "Do theme selection, caret, scrollbar and focus from the palette.",
+      "Do check both themes; the device chooses by default."
+    ],
+    "donts": [
+      "Don't put a kicker or eyebrow label above a heading.",
+      "Don't blur a pane that has nothing under it.",
+      "Don't use a black page with a neon accent, an accented headline word, three numbered step cards or a closing CTA band.",
+      "Don't use coloured side stripes, gradient text, glow as depth or hard offset shadows.",
+      "Don't animate width, height or padding."
+    ]
+  }
+}

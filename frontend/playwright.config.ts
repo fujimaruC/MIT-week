@@ -12,7 +12,9 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // The API rate limiter (a few audits per minute per client) can refuse the
+  // last audits of a fast run; one retry lets its Retry-After window pass.
+  retries: 1,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
@@ -27,7 +29,9 @@ export default defineConfig({
       url: 'http://localhost:8080/healthz',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: { SERVER_PORT: '8080', LLM_MOCK: 'true', ENVIRONMENT: 'development' }
+      // The domain-age lookup would call real registries; it is tested
+      // against a fake one in Go, so e2e stays offline.
+      env: { SERVER_PORT: '8080', LLM_MOCK: 'true', ENVIRONMENT: 'development', DOMAIN_AGE_LOOKUP: 'false' }
     },
     {
       command: 'npm run preview -- --port 4173 --strictPort',

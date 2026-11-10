@@ -5,9 +5,11 @@
     text: string;
     tactics: Tactic[];
     labels: Record<string, { label: string; why: string }>;
+    /** Shown above the quote, e.g. "Dibaca dari gambar" for OCR text. */
+    sourceLabel?: string;
   }
 
-  let { text, tactics, labels }: Props = $props();
+  let { text, tactics, labels, sourceLabel = '' }: Props = $props();
 
   /**
    * Splits text into plain and marked segments. Matching is case-insensitive
@@ -46,6 +48,14 @@
     // Number by first appearance so the legend order matches the reading order.
     const order: string[] = [];
     for (const m of marks) if (!order.includes(m.key)) order.push(m.key);
+    // A verified phrase that is not in the visible text (for example beyond
+    // the part shown) is still listed, quoted, so no finding is hidden.
+    const unplaced: Array<{ code: string; phrase: string }> = [];
+    for (const t of tactics) {
+      if (labels[t.code] && !order.includes(t.code) && !unplaced.some((u) => u.code === t.code)) {
+        unplaced.push({ code: t.code, phrase: t.phrase });
+      }
+    }
 
     const out: Array<{ text: string; key?: string; n?: number }> = [];
     let cursor = 0;
@@ -56,11 +66,12 @@
     }
     if (cursor < text.length) out.push({ text: text.slice(cursor) });
 
-    return { segments: out, order };
+    return { segments: out, order, unplaced };
   });
 </script>
 
 <figure class="quote">
+  {#if sourceLabel}<p class="source-label">{sourceLabel}</p>{/if}
   <blockquote class="text">
     {#each segments.segments as seg, i (i)}{#if seg.key}<mark class="tactic"
           >{seg.text}<sup class="n" aria-hidden="true">{seg.n}</sup></mark
@@ -78,12 +89,27 @@
           </span>
         </li>
       {/each}
+      {#each segments.unplaced as item, i (item.code)}
+        <li>
+          <span class="num" aria-hidden="true">{segments.order.length + i + 1}</span>
+          <span>
+            <strong>{labels[item.code].label}:</strong> “{item.phrase}”.
+            {labels[item.code].why}
+          </span>
+        </li>
+      {/each}
     </ol>
   </figcaption>
 </figure>
 
 <style>
   .quote { margin: 0; }
+  .source-label {
+    margin: 0 0 var(--space-2);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
   .text {
     margin: 0;
     white-space: pre-wrap;

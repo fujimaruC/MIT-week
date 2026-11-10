@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# Fails when the backend demo data and the frontend copy drift apart.
-# Both files must be byte-identical (TECH_SPEC §9).
+# Fails when data that must be identical in the backend and the frontend
+# drifts apart (TECH_SPEC §6.2 and §9): demo dossiers and Balas Sopan
+# templates. Every copy must be byte-identical to its canonical file.
 set -euo pipefail
 
-BACKEND="backend/internal/demo/demo-cases.json"
-FRONTEND="frontend/src/lib/data/demo-cases.json"
+status=0
+check() {
+  local canonical="$1"; shift
+  for copy in "$@"; do
+    if ! diff -q "$canonical" "$copy" >/dev/null; then
+      echo "FAIL: $copy differs from $canonical"
+      diff "$canonical" "$copy" | head -20
+      status=1
+    fi
+  done
+}
 
-if [[ ! -f "$BACKEND" ]]; then
-  echo "skip: $BACKEND not created yet (Phase 1)"
-  exit 0
+check backend/internal/demo/demo-cases.json frontend/src/lib/data/demo-cases.json
+
+if [[ $status -eq 0 ]]; then
+  echo "demo-cases.json in sync"
 fi
-
-if ! diff -q "$BACKEND" "$FRONTEND" >/dev/null; then
-  echo "FAIL: demo-cases.json differs between backend and frontend"
-  diff "$BACKEND" "$FRONTEND" | head -20
-  exit 1
-fi
-
-echo "demo-cases.json in sync"
+exit $status

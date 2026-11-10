@@ -171,3 +171,62 @@ func TestMiddlewareSetsRetryAfter(t *testing.T) {
 		t.Fatalf("onLimited called %d times, want 1", limitedCalls)
 	}
 }
+
+// A client behind an appending proxy can prepend anything it likes to
+// X-Forwarded-For; only the rightmost entry was written by our proxy.
+func TestForwardedForUsesRightmostEntry(t *testing.T) {
+	cfg := testConfig()
+	cfg.TrustedProxies = ParseTrustedProxies([]string{"*"})
+	rl := NewRateLimiter(cfg)
+	defer rl.Close()
+
+	honest := rl.ClientKey(reqFrom("10.1.1.1:1", "198.51.100.7"))
+	forged := rl.ClientKey(reqFrom("10.1.1.1:2", "1.2.3.4, 198.51.100.7"))
+	if honest != forged {
+		t.Fatal("a forged leading X-Forwarded-For entry escaped the client's bucket")
+	}
+	junk := rl.ClientKey(reqFrom("10.9.9.9:3", "not-an-ip"))
+	peer := rl.ClientKey(reqFrom("10.9.9.9:4", ""))
+	if junk != peer {
+		t.Fatal("a non-IP forwarded value must fall back to the peer address")
+	}
+}
+
+func TestDedicatedClientIPHeader(t *testing.T) {
+	cfg := testConfig()
+	cfg.TrustedProxies = ParseTrustedProxies([]string{"*"})
+	cfg.ClientIPHeader = "Fly-Client-IP"
+	rl := NewRateLimiter(cfg)
+	defer rl.Close()
+
+	r1 := reqFrom("[fdaa::1]:1", "9.9.9.9")
+	r1.Header.Set("Fly-Client-IP", "198.51.100.7")
+	r2 := reqFrom("[fdaa::1]:2", "8.8.8.8")
+	r2.Header.Set("Fly-Client-IP", "198.51.100.7")
+	if rl.ClientKey(r1) != rl.ClientKey(r2) {
+		t.Fatal("Fly-Client-IP must decide the bucket, not X-Forwarded-For")
+	}
+	r3 := reqFrom("[fdaa::1]:3", "")
+	r3.Header.Set("Fly-Client-IP", "198.51.100.8")
+	if rl.ClientKey(r1) == rl.ClientKey(r3) {
+		t.Fatal("different clients behind the proxy shared a bucket")
+	}
+}
+
+func TestHealthIsNeverRateLimited(t *testing.T) {
+	cfg := testConfig()
+	cfg.Burst = 1
+	rl := NewRateLimiter(cfg)
+	defer rl.Close()
+	h := rl.Middleware(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTooManyRequests) })(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	for i := 0; i < 20; i++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		req.RemoteAddr = "203.0.113.9:1"
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("health probe %d throttled", i)
+		}
+	}
+}
