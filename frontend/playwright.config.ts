@@ -37,7 +37,9 @@ export default defineConfig({
       command: 'npm run preview -- --port 4173 --strictPort',
       url: 'http://localhost:4173',
       reuseExistingServer: !process.env.CI,
-      timeout: 120_000
+      timeout: 120_000,
+      // The built SPA calls the same-origin /api/v1; preview forwards it to the Go API above.
+      env: { E2E_API_PROXY: 'http://localhost:8080' }
     }
   ]
 });

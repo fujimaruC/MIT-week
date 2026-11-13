@@ -8,10 +8,8 @@ import { fileURLToPath } from 'node:url';
  */
 test('a screenshot upload reaches the ELA comparison slider', async ({ page }) => {
   await page.goto('/deteksi');
-  await page.getByRole('tab', { name: 'Gambar' }).click();
-  await page.setInputFiles('#amba-file', fileURLToPath(new URL('./fixtures/sample.png', import.meta.url)));
-
-  await page.getByRole('button', { name: 'Periksa', exact: true }).click();
+  await page.setInputFiles('input[type="file"]', fileURLToPath(new URL('./fixtures/sample.png', import.meta.url)));
+  // Picking the file starts the check; there is no separate send button for images.
 
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 25_000 });
   await expect(page.getByRole('heading', { name: 'Tampilan gambar' })).toBeVisible();

@@ -82,6 +82,10 @@ export default defineConfig(({ mode }) => ({
     }),
     securityHeaders()
   ],
+  // `vite preview` has no reverse proxy of its own, and a production build calls
+  // the same-origin /api/v1. The e2e suite (playwright.config.ts) sets
+  // E2E_API_PROXY so those calls reach the Go API it starts; nothing else sets it.
+  preview: process.env.E2E_API_PROXY ? { proxy: { '/api': process.env.E2E_API_PROXY } } : undefined,
   test: {
     include: ['src/**/*.{test,spec}.{js,ts}'],
     environment: 'jsdom',

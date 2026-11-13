@@ -2,13 +2,14 @@ import { test, expect, type Page } from '@playwright/test';
 
 /**
  * Result page flow: read-aloud (PRD F14) and the three-tap link check.
+ * (Auto-read was removed from the UI, so its test is gone.)
  */
 
 async function openDemo(page: Page, name: RegExp) {
   await page.goto('/deteksi');
   await page.getByRole('button', { name }).click();
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 10_000 });
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hasil pemeriksaan');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Tidak ditemukan tanda bahaya|Perlu diperiksa|Terindikasi hoaks atau manipulasi/);
 }
 
 /** Replaces speechSynthesis with a recorder so the test can hear it. */
@@ -47,25 +48,13 @@ test('read-aloud speaks the lead sentence first, in Indonesian', async ({ page }
   expect(spoken[0].startsWith(`id-ID|${sentence}`)).toBe(true);
 });
 
-test('auto-read is off by default and speaks the next result once enabled', async ({ page }) => {
-  await mockSpeech(page);
-  await openDemo(page, 'Video TikTok');
-  expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken)).toEqual([]);
-
-  await page.getByLabel('Bacakan otomatis hasil berikutnya').check();
-  await openDemo(page, 'Gambar buatan AI');
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.length))
-    .toBe(1);
-});
-
 test('a link check takes at most 3 taps', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Tautan video atau postingan').fill('https://bri-verifikasi.example/login');
+  await page.getByLabel('Tautan video, postingan, atau berita').fill('https://bri-verifikasi.example/login');
   let taps = 0;
   await page.getByRole('button', { name: 'Periksa', exact: true }).click();
   taps++;
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 20_000 });
   expect(taps).toBeLessThanOrEqual(3);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hasil pemeriksaan');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Tidak ditemukan tanda bahaya|Perlu diperiksa|Terindikasi hoaks atau manipulasi/);
 });

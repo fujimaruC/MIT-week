@@ -8,8 +8,7 @@ import { test, expect } from '@playwright/test';
  */
 test('a link without a preview says what the result rests on and still concludes', async ({ page }) => {
   await page.goto('/deteksi');
-  await page.getByRole('tab', { name: 'Tautan' }).click();
-  await page.getByLabel(/tautan/i).first().fill('https://bri-verifikasi.example/login');
+  await page.getByLabel('Tautan video, postingan, atau berita').fill('https://bri-verifikasi.example/login');
   await page.getByRole('button', { name: 'Periksa', exact: true }).click();
 
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 20_000 });
@@ -33,6 +32,8 @@ test('the screenshot demo opens the ELA viewer and OCR tactics', async ({ page }
   await page.goto('/deteksi');
   await page.getByRole('button', { name: 'Tangkapan layar diedit' }).click();
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 10_000 });
+  // The written detail (OCR text, tactics) sits under the full details.
+  await page.getByText('Lihat rincian lengkap').click();
 
   await expect(page.getByLabel('Geser untuk membandingkan gambar asli dan hasil ELA')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Dibaca dari gambar')).toBeVisible();

@@ -20,21 +20,17 @@ test('the AI picture demo explains what the file declares', async ({ page }) => 
 
 test('uploading the AI picture reaches the same verdict through the live pipeline', async ({ page }) => {
   await page.goto('/deteksi');
-  await page.getByRole('tab', { name: 'Gambar' }).click();
-  await page.setInputFiles('#amba-file', fileURLToPath(new URL('../static/demo/gambar-ai.jpg', import.meta.url)));
-  await page.getByRole('button', { name: 'Periksa', exact: true }).click();
+  await page.setInputFiles('input[type="file"]', fileURLToPath(new URL('../static/demo/gambar-ai.jpg', import.meta.url)));
 
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 25_000 });
   await expect(page.locator('[data-testid="verdict-sentence"]')).toContainText(LEAD);
   await expect(page.locator('[data-testid="pillar-ai"]')).toContainText(C2PA_LINE);
-  await expect(page.locator('[data-testid="verdict-badge"]')).toContainText('85');
+  await expect(page.getByRole('img', { name: 'Skor risiko 85 dari 100' })).toBeVisible();
 });
 
 test('an ordinary upload says missing origin data proves nothing', async ({ page }) => {
   await page.goto('/deteksi');
-  await page.getByRole('tab', { name: 'Gambar' }).click();
-  await page.setInputFiles('#amba-file', fileURLToPath(new URL('./fixtures/sample.png', import.meta.url)));
-  await page.getByRole('button', { name: 'Periksa', exact: true }).click();
+  await page.setInputFiles('input[type="file"]', fileURLToPath(new URL('./fixtures/sample.png', import.meta.url)));
 
   await expect(page).toHaveURL(/\/hasil$/, { timeout: 25_000 });
   await expect(page.locator('[data-testid="pillar-ai"]')).toContainText('ketiadaannya bukan bukti apa pun');
